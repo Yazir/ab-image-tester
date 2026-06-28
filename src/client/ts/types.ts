@@ -17,6 +17,7 @@ export interface Poll {
   containerWidth: number;
   containerHeight: number;
   fitMode: FitMode;
+  showResults: boolean;
   createdAt: number;
 }
 

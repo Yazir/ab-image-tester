@@ -7,14 +7,17 @@ import adminRoutes from './routes/admin';
 import { generalLimiter } from './middleware/rateLimit';
 import { close as closeDb } from './store';
 
-export function createApp(): express.Application {
+export function createApp({ isDev } = { isDev: false }): express.Application {
   const app = express();
 
   function securityHeaders(_req: express.Request, res: express.Response, next: express.NextFunction) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '0');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'");
+    const csp = isDev
+      ? "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' ws:"
+      : "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'";
+    res.setHeader('Content-Security-Policy', csp);
     next();
   }
 

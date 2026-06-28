@@ -87,6 +87,30 @@ label {
   letter-spacing: 0.5px;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.checkbox-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin: 0;
+}
+.checkbox-label {
+  display: inline !important;
+  font-size: 0.9rem !important;
+  font-weight: 400 !important;
+  color: var(--text) !important;
+  margin-bottom: 0 !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  cursor: pointer;
+}
+
 .form-group { margin-bottom: 20px; }
 
 /* Home page */
@@ -576,6 +600,59 @@ label {
   min-width: 80px;
   text-align: right;
   color: var(--text-dim);
+}
+
+/* Results grid (public) */
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+.results-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border var(--transition);
+}
+.results-card:hover { border-color: var(--accent); }
+.results-card-img {
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: var(--surface2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.results-card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: zoom-in;
+  display: block;
+}
+.results-card-info {
+  padding: 14px;
+}
+.results-card-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.results-card .results-bar-fill {
+  height: 20px;
+  margin-bottom: 6px;
+}
+.results-card .results-bar-inner {
+  transition: width 0.6s ease;
+}
+.results-card-stat {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  text-align: right;
 }
 
 /* Voters table */

@@ -6,10 +6,14 @@ import type { Poll, Image, VoterInfo, Selection, FitMode, Pairing } from '../typ
 let pollId = '';
 let token = '';
 let currentTab = 'images';
+let previewActive = false;
+let stopPreview: (() => void) | null = null;
 
 export function renderAdmin(container: HTMLElement, pid: string) {
   pollId = pid;
   token = sessionStorage.getItem(`adminToken-${pid}`) || '';
+  previewActive = false;
+  stopPreview = null;
 
   if (!token) {
     container.innerHTML = `<div class="hero"><h2>Access Denied</h2><p>Missing admin token. Create a poll from the home page.</p></div>`;
@@ -19,18 +23,17 @@ export function renderAdmin(container: HTMLElement, pid: string) {
   container.innerHTML = `
     <div>
       <div class="admin-tabs">
-        <button class="admin-tab active" data-tab="images">Images</button>
-        <button class="admin-tab" data-tab="settings">Settings</button>
-        <button class="admin-tab" data-tab="size">Container Size</button>
-        <button class="admin-tab" data-tab="share">Share</button>
-        <button class="admin-tab" data-tab="metadata">Voters & Results</button>
-        <button class="btn btn-primary" id="preview-btn" style="margin-left:auto;padding:6px 16px;font-size:0.8rem">Preview</button>
+        <button class="admin-tab ${currentTab === 'images' ? 'active' : ''}" data-tab="images">Images</button>
+        <button class="admin-tab ${currentTab === 'settings' ? 'active' : ''}" data-tab="settings">Settings</button>
+        <button class="admin-tab ${currentTab === 'size' ? 'active' : ''}" data-tab="size">Container Size</button>
+        <button class="admin-tab ${currentTab === 'share' ? 'active' : ''}" data-tab="share">Share</button>
+        <button class="admin-tab ${currentTab === 'metadata' ? 'active' : ''}" data-tab="metadata">Voters & Results</button>
       </div>
-      <div class="admin-tab-content active" data-content="images"></div>
-      <div class="admin-tab-content" data-content="settings"></div>
-      <div class="admin-tab-content" data-content="size"></div>
-      <div class="admin-tab-content" data-content="share"></div>
-      <div class="admin-tab-content" data-content="metadata"></div>
+      <div class="admin-tab-content ${currentTab === 'images' ? 'active' : ''}" data-content="images"></div>
+      <div class="admin-tab-content ${currentTab === 'settings' ? 'active' : ''}" data-content="settings"></div>
+      <div class="admin-tab-content ${currentTab === 'size' ? 'active' : ''}" data-content="size"></div>
+      <div class="admin-tab-content ${currentTab === 'share' ? 'active' : ''}" data-content="share"></div>
+      <div class="admin-tab-content ${currentTab === 'metadata' ? 'active' : ''}" data-content="metadata"></div>
     </div>
   `;
 
@@ -47,17 +50,36 @@ export function renderAdmin(container: HTMLElement, pid: string) {
     });
   });
 
-  document.getElementById('preview-btn')!.addEventListener('click', () => startPreview(container));
+  const oldToggle = document.getElementById('preview-toggle-btn');
+  if (oldToggle) oldToggle.remove();
+  const toggleBtn = document.createElement('button');
+  toggleBtn.id = 'preview-toggle-btn';
+  toggleBtn.className = 'btn btn-primary';
+  toggleBtn.style.cssText = 'position:fixed;top:12px;right:16px;z-index:30;padding:6px 16px;font-size:0.8rem';
+  toggleBtn.textContent = 'Preview';
+  toggleBtn.addEventListener('click', () => {
+    if (previewActive) {
+      stopPreview?.();
+    } else {
+      startPreview(container, toggleBtn);
+    }
+  });
+  document.body.appendChild(toggleBtn);
 
   loadPoll();
 }
 
-async function startPreview(container: HTMLElement) {
+async function startPreview(container: HTMLElement, toggleBtn: HTMLButtonElement) {
   const poll = await api<Poll>(`/polls/${pollId}`, { headers: authHeaders(token) });
   if (poll.images.length < 2) {
     showToast('Need at least 2 images to preview', 'error');
     return;
   }
+
+  previewActive = true;
+  toggleBtn.textContent = 'Stop Preview';
+  toggleBtn.classList.remove('btn-primary');
+  toggleBtn.classList.add('btn-danger');
 
   const fp = 'preview-' + crypto.randomUUID();
   const pairings = await api<{ pairings: Pairing[]; totalRounds: number }>(`/polls/${pollId}/pairings`, { headers: { 'x-voter-fingerprint': fp } });
@@ -65,7 +87,28 @@ async function startPreview(container: HTMLElement) {
   let round = 0;
   const selections: Selection[] = [];
   let animating = false;
+  let animTimer: ReturnType<typeof setTimeout> | null = null;
   const FM = poll.fitMode;
+
+  function previewCleanup() {
+    if (animTimer) clearTimeout(animTimer);
+    const stage = document.getElementById('vote-stage');
+    if (stage) stage.remove();
+    const bar = document.getElementById('preview-progress');
+    if (bar) bar.remove();
+    const pp = document.getElementById('preview-panel');
+    if (pp) pp.remove();
+    previewActive = false;
+    stopPreview = null;
+    toggleBtn.textContent = 'Preview';
+    toggleBtn.classList.remove('btn-danger');
+    toggleBtn.classList.add('btn-primary');
+  }
+
+  stopPreview = () => {
+    previewCleanup();
+    renderAdmin(container, pollId);
+  };
 
   function renderProgress() {
     const bar = document.getElementById('preview-progress');
@@ -113,9 +156,7 @@ async function startPreview(container: HTMLElement) {
     document.body.appendChild(stage);
 
     document.getElementById('preview-close-btn')!.addEventListener('click', () => {
-      stage.remove();
-      const b = document.getElementById('preview-progress');
-      if (b) b.remove();
+      previewCleanup();
       renderAdmin(container, pollId);
     });
 
@@ -137,7 +178,7 @@ async function startPreview(container: HTMLElement) {
       selections.push({ round, leftImageId: p.left.id, rightImageId: p.right.id, winnerId: winner.id });
       if (side === 'left') { leftEl.classList.add('smack-winner'); rightEl.classList.add('smack-loser'); }
       else { rightEl.classList.add('smack-winner'); leftEl.classList.add('smack-loser'); }
-      setTimeout(() => { round++; animating = false; renderPairing(); }, 500);
+      animTimer = setTimeout(() => { round++; animating = false; renderPairing(); }, 500);
     };
 
     leftEl.addEventListener('click', () => choose('left'));
@@ -151,10 +192,7 @@ async function startPreview(container: HTMLElement) {
   }
 
   function renderPreviewDone() {
-    const stage = document.getElementById('vote-stage');
-    if (stage) stage.remove();
-    const bar = document.getElementById('preview-progress');
-    if (bar) bar.remove();
+    previewCleanup();
 
     const stats: Record<string, { wins: number }> = {};
     for (const s of selections) {
@@ -417,24 +455,45 @@ function renderSettingsTab(poll: Poll) {
       <label for="poll-rounds">Number of Rounds</label>
       <input id="poll-rounds" type="number" min="1" max="100" value="${poll.rounds}">
     </div>
-    <button class="btn btn-primary" id="save-settings">Save Settings</button>
+    <div class="form-group">
+      <div class="checkbox-row">
+        <input type="checkbox" id="poll-show-results" ${poll.showResults ? 'checked' : ''}>
+        <label for="poll-show-results" class="checkbox-label">Show results to voters after voting</label>
+      </div>
+    </div>
   `;
 
-  document.getElementById('save-settings')!.addEventListener('click', async () => {
-    const title = (document.getElementById('poll-title') as HTMLInputElement).value;
-    const description = (document.getElementById('poll-desc') as HTMLTextAreaElement).value;
-    const rounds = parseInt((document.getElementById('poll-rounds') as HTMLInputElement).value, 10);
+  const collect = () => ({
+    title: (document.getElementById('poll-title') as HTMLInputElement).value,
+    description: (document.getElementById('poll-desc') as HTMLTextAreaElement).value,
+    rounds: parseInt((document.getElementById('poll-rounds') as HTMLInputElement).value, 10),
+    showResults: (document.getElementById('poll-show-results') as HTMLInputElement).checked,
+  });
 
+  let saveTimer: ReturnType<typeof setTimeout>;
+  const scheduleSave = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => doSave(), 600);
+  };
+
+  const doSave = async () => {
     try {
       await api(`/polls/${pollId}`, {
         method: 'PATCH',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, rounds }),
+        body: JSON.stringify(collect()),
       });
-      showToast('Settings saved', 'success');
     } catch (e: any) {
       showToast(e.message, 'error');
     }
+  };
+
+  document.getElementById('poll-title')!.addEventListener('input', scheduleSave);
+  document.getElementById('poll-desc')!.addEventListener('input', scheduleSave);
+  document.getElementById('poll-rounds')!.addEventListener('input', scheduleSave);
+  document.getElementById('poll-show-results')!.addEventListener('change', () => {
+    clearTimeout(saveTimer);
+    doSave();
   });
 }
 
@@ -477,7 +536,6 @@ function renderSizeTab(poll: Poll) {
         <div class="size-row">
           ${firstImg ? `<button class="btn btn-secondary" id="detect-size" style="font-size:0.8rem">Detect from images</button>` : ''}
           <span id="detect-info" style="display:none;font-size:0.75rem;color:var(--text-dim)"></span>
-          <button class="btn btn-primary" id="save-size" style="font-size:0.85rem;margin-left:auto">Apply Settings</button>
           <button class="btn btn-secondary" id="reset-size" style="font-size:0.85rem">Reset Default</button>
         </div>
       </div>
@@ -528,24 +586,10 @@ function renderSizeTab(poll: Poll) {
   const syncFromW = () => { if (arLocked) { hInput.value = Math.round(parseInt(wInput.value, 10) / ar).toString(); updatePreview(); } };
   const syncFromH = () => { if (arLocked) { wInput.value = Math.round(parseInt(hInput.value, 10) * ar).toString(); updatePreview(); } };
 
-  wInput.addEventListener('input', () => { syncFromW(); updatePreview(); });
-  hInput.addEventListener('input', () => { syncFromH(); updatePreview(); });
-
   document.getElementById('lock-ar')!.addEventListener('click', () => {
     arLocked = !arLocked;
     ar = parseInt(wInput.value, 10) / parseInt(hInput.value, 10);
     lockIcon.textContent = arLocked ? '🔒' : '🔓';
-  });
-
-  el.querySelectorAll('.size-preset').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const bw = parseInt((btn as HTMLElement).dataset.w!, 10);
-      const bh = parseInt((btn as HTMLElement).dataset.h!, 10);
-      wInput.value = bw.toString();
-      hInput.value = bh.toString();
-      if (arLocked) ar = bw / bh;
-      updatePreview();
-    });
   });
 
   const detectBtn = document.getElementById('detect-size') as HTMLButtonElement | null;
@@ -586,16 +630,49 @@ function renderSizeTab(poll: Poll) {
       el.querySelectorAll('.size-fit-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       updatePreview();
+      saveSize();
     });
   });
 
-  document.getElementById('save-size')?.addEventListener('click', async () => {
+  const collectSize = () => ({
+    containerWidth: parseInt(wInput.value, 10),
+    containerHeight: parseInt(hInput.value, 10),
+    fitMode,
+  });
+
+  let sizeTimer: ReturnType<typeof setTimeout>;
+  const saveSize = async () => {
+    clearTimeout(sizeTimer);
     try {
-      await api(`/polls/${pollId}`, { method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ containerWidth: parseInt(wInput.value, 10), containerHeight: parseInt(hInput.value, 10), fitMode }),
+      await api(`/polls/${pollId}`, {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify(collectSize()),
       });
-      showToast('Settings saved', 'success');
     } catch (e: any) { showToast(e.message, 'error'); }
+  };
+
+  wInput.addEventListener('input', () => {
+    syncFromW();
+    clearTimeout(sizeTimer);
+    sizeTimer = setTimeout(() => saveSize(), 600);
+  });
+  hInput.addEventListener('input', () => {
+    syncFromH();
+    clearTimeout(sizeTimer);
+    sizeTimer = setTimeout(() => saveSize(), 600);
+  });
+
+  el.querySelectorAll('.size-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const bw = parseInt((btn as HTMLElement).dataset.w!, 10);
+      const bh = parseInt((btn as HTMLElement).dataset.h!, 10);
+      wInput.value = bw.toString();
+      hInput.value = bh.toString();
+      if (arLocked) ar = bw / bh;
+      updatePreview();
+      saveSize();
+    });
   });
 
   document.getElementById('reset-size')?.addEventListener('click', () => {
@@ -604,6 +681,7 @@ function renderSizeTab(poll: Poll) {
     el.querySelectorAll('.size-fit-btn').forEach(b => b.classList.remove('active'));
     el.querySelector('[data-fit="contain"]')?.classList.add('active');
     updatePreview();
+    saveSize();
   });
 }
 

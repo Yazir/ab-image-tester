@@ -4,7 +4,7 @@ import { createApp, errorHandler, closeDatabase } from './app';
 const PORT = process.env.PORT || 3000;
 
 async function start() {
-  const app = createApp();
+  const app = createApp({ isDev: true });
 
   const vite = await createViteServer({
     server: { middlewareMode: true },

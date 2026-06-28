@@ -3,9 +3,10 @@ import { v4 as uuid } from 'uuid';
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
-import { getPoll, getVotesForVoter, saveVote } from '../store';
+import { getPoll, getVotesForPoll, getVotesForVoter, saveVote } from '../store';
 import { Pairing, Selection, Image } from '../../shared/types';
 import { voteLimiter } from '../middleware/rateLimit';
+import { computeResults } from '../results';
 
 function loadVoterSecret(): string {
   const DATA_DIR = process.env.TEST_DATA_DIR || path.resolve(__dirname, '../../../data');
@@ -68,17 +69,40 @@ function seededShuffle<T>(arr: T[], seed: string): T[] {
 }
 
 function generatePairings(pollId: string, voterFingerprint: string, rounds: number, images: Image[]): Pairing[] {
-  const totalRounds = Math.min(rounds, Math.floor(images.length * (images.length - 1) / 2));
+  const n = images.length;
+  if (n < 2) return [];
+
+  const totalRounds = Math.min(rounds, Math.floor(n * (n - 1) / 2));
   const allPairs: [number, number][] = [];
-  for (let i = 0; i < images.length; i++) {
-    for (let j = i + 1; j < images.length; j++) {
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
       allPairs.push([i, j]);
     }
   }
 
   const seed = `${pollId}:${voterFingerprint}`;
   const shuffled = seededShuffle(allPairs, seed);
-  const selected = shuffled.slice(0, totalRounds);
+
+  const appearances = new Array(n).fill(0);
+  const available = [...shuffled];
+  const selected: [number, number][] = [];
+
+  for (let round = 0; round < totalRounds; round++) {
+    let bestIdx = 0;
+    let bestScore = Infinity;
+    for (let k = 0; k < available.length; k++) {
+      const [a, b] = available[k];
+      const score = appearances[a] + appearances[b];
+      if (score < bestScore) {
+        bestScore = score;
+        bestIdx = k;
+      }
+    }
+    const pair = available.splice(bestIdx, 1)[0];
+    appearances[pair[0]]++;
+    appearances[pair[1]]++;
+    selected.push(pair);
+  }
 
   return selected.map((pair, idx) => {
     const leftRightSeed = `${seed}:round:${idx}`;
@@ -109,6 +133,16 @@ function validateSelections(pairings: Pairing[], selections: Selection[]): boole
   }
   return true;
 }
+
+// Public aggregated results — no auth required
+router.get('/:pollId/results', (req: Request, res: Response) => {
+  const poll = getPoll(req.params.pollId as string);
+  if (!poll) return res.status(404).json({ error: 'Not found' });
+  if (!poll.showResults) return res.status(403).json({ error: 'Results are not available for this poll' });
+
+  const votes = getVotesForPoll(poll.id);
+  res.json(computeResults(poll, votes));
+});
 
 // CSRF check middleware
 function csrfCheck(req: Request, res: Response, next: Function) {

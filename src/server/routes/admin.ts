@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { getPoll, getVotesForPoll } from '../store';
 import { requireAdminOrShare } from '../middleware/auth';
 import { Selection } from '../../shared/types';
+import { computeResults } from '../results';
 
 const router = Router();
 
@@ -47,25 +48,7 @@ router.get('/:pollId/results', requireAdminOrShare, (req: Request, res: Response
   if (!poll) return res.status(404).json({ error: 'Not found' });
 
   const votes = getVotesForPoll(poll.id);
-  const imageStats: Record<string, { wins: number; appearances: number }> = {};
-
-  for (const img of poll.images) {
-    imageStats[img.id] = { wins: 0, appearances: 0 };
-  }
-
-  for (const vote of votes) {
-    for (const sel of vote.selections) {
-      if (imageStats[sel.leftImageId]) imageStats[sel.leftImageId].appearances++;
-      if (imageStats[sel.rightImageId]) imageStats[sel.rightImageId].appearances++;
-      if (imageStats[sel.winnerId]) imageStats[sel.winnerId].wins++;
-    }
-  }
-
-  res.json({
-    poll: { id: poll.id, title: poll.title, description: poll.description, images: poll.images, rounds: poll.rounds },
-    totalVotes: votes.length,
-    imageStats,
-  });
+  res.json(computeResults(poll, votes));
 });
 
 export default router;

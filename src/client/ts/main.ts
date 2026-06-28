@@ -10,6 +10,8 @@ function route() {
 
   const panel = document.getElementById('preview-panel');
   if (panel) panel.remove();
+  const toggleBtn = document.getElementById('preview-toggle-btn');
+  if (toggleBtn) toggleBtn.remove();
   const stage = document.getElementById('vote-stage');
   if (stage) stage.remove();
   const bar = document.getElementById('progress-sidebar');

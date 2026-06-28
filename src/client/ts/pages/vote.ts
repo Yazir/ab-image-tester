@@ -1,7 +1,7 @@
 import { showToast, openLightbox } from '../main';
 import { api, voterHeaders, storeVoterToken } from '../utils/api';
 import { escHtml, escAttr } from '../utils/sanitize';
-import type { Pairing, Poll } from '../types';
+import type { Image, Pairing, Poll } from '../types';
 
 interface VotePageState {
   poll: Poll | null;
@@ -221,10 +221,80 @@ async function submitVotes() {
 
 function renderPostVote(container: HTMLElement, pollId: string) {
   const p = state.poll!;
+  const alreadyVoted = !state.selections.length;
+  const msg = alreadyVoted ? 'You have already voted.' : 'Thank you for voting!';
+  const resultsBtn = p.showResults
+    ? `<button class="btn btn-primary" id="show-results">Show Results</button>`
+    : '';
   container.innerHTML = `
     <div class="vote-hero">
       <h2>${escHtml(p.title || 'Poll')}</h2>
-      <p>Thank you for voting!</p>
+      <p>${escHtml(msg)}</p>
+      ${resultsBtn}
     </div>
   `;
+  if (p.showResults) {
+    document.getElementById('show-results')!.addEventListener('click', () => {
+      renderResults(container, pollId);
+    });
+  }
+}
+
+async function renderResults(container: HTMLElement, pollId: string) {
+  container.innerHTML = '<div class="vote-hero"><p>Loading results...</p></div>';
+
+  try {
+    const data = await api<{
+      poll: { id: string; title: string; description: string; images: Image[]; rounds: number };
+      totalVotes: number;
+      imageStats: Record<string, { wins: number; appearances: number }>;
+    }>(`/polls/${pollId}/results`);
+
+    const sorted = [...data.poll.images].sort((a, b) => {
+      const sa = data.imageStats[a.id];
+      const sb = data.imageStats[b.id];
+      const pa = sa.appearances > 0 ? sa.wins / sa.appearances : 0;
+      const pb = sb.appearances > 0 ? sb.wins / sb.appearances : 0;
+      return pb - pa;
+    });
+
+    let html = `
+      <div class="vote-hero" style="padding:24px 20px">
+        <h2>${escHtml(data.poll.title || 'Poll')} — Results</h2>
+        <p style="color:var(--text-dim);margin-bottom:24px">${data.totalVotes} vote(s)</p>
+        <div class="results-grid">
+    `;
+
+    for (const img of sorted) {
+      const stats = data.imageStats[img.id];
+      const pct = stats.appearances > 0
+        ? Math.min(100, Math.max(0, Math.round((stats.wins / stats.appearances) * 100)))
+        : 0;
+      html += `
+        <div class="results-card">
+          <div class="results-card-img">
+            <img src="/uploads/${escAttr(img.filename)}" alt="${escHtml(img.originalName)}" draggable="false">
+          </div>
+          <div class="results-card-info">
+            <div class="results-card-name" title="${escAttr(img.originalName)}">${escHtml(img.originalName)}</div>
+            <div class="results-bar-fill">
+              <div class="results-bar-inner" style="width:${pct}%"></div>
+            </div>
+            <div class="results-card-stat">${pct}% — ${stats.wins}/${stats.appearances} wins</div>
+          </div>
+        </div>
+      `;
+    }
+
+    html += '</div></div>';
+    container.innerHTML = html;
+
+    container.querySelectorAll('.results-card-img img').forEach(img => {
+      img.addEventListener('click', () => {
+        openLightbox((img as HTMLImageElement).src);
+      });
+    });
+  } catch (e: any) {
+    container.innerHTML = `<div class="vote-hero"><h2>Error</h2><p>${escHtml(e.message)}</p></div>`;
+  }
 }

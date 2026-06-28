@@ -92,7 +92,7 @@ router.get('/view/:pollId', (req: Request, res: Response) => {
 
 // Update poll settings
 router.patch('/:pollId', requireAdmin, (req: Request, res: Response) => {
-  const allowed = ['title', 'description', 'rounds', 'containerWidth', 'containerHeight', 'fitMode'];
+  const allowed = ['title', 'description', 'rounds', 'containerWidth', 'containerHeight', 'fitMode', 'showResults'];
   const updates: Record<string, unknown> = {};
   for (const key of allowed) {
     if (req.body[key] === undefined) continue;
@@ -116,6 +116,9 @@ router.patch('/:pollId', requireAdmin, (req: Request, res: Response) => {
         break;
       case 'fitMode':
         if (!['contain', 'cover', 'scale-down'].includes(req.body[key])) return res.status(400).json({ error: 'fitMode must be contain, cover, or scale-down' });
+        break;
+      case 'showResults':
+        if (typeof req.body[key] !== 'boolean') return res.status(400).json({ error: 'showResults must be a boolean' });
         break;
     }
     updates[key] = req.body[key];
