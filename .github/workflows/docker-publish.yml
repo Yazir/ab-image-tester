@@ -37,7 +37,8 @@ jobs:
     needs: matrix-prep
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.matrix-prep.outputs.matrix) }}
+      matrix:
+        include: ${{ fromJson(needs.matrix-prep.outputs.matrix) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     permissions:
