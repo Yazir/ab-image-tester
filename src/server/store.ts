@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuid } from 'uuid';
-import { Poll, Vote, Image, Selection } from '../shared/types';
+import { Poll, Vote, Image, Selection, AnalyticsSnapshot } from '../shared/types';
 
 const DATA_DIR = process.env.TEST_DATA_DIR || path.resolve(__dirname, '../../data');
 const DB_PATH = path.join(DATA_DIR, 'app.db');
@@ -44,6 +44,13 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS waitlist (
     email TEXT PRIMARY KEY,
     created_at INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS analytics_counters (
+    date TEXT NOT NULL,
+    counter TEXT NOT NULL,
+    value INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (date, counter)
   );
 `);
 
@@ -274,13 +281,7 @@ export interface DailyVote {
 }
 
 export function getVotesByDay(): DailyVote[] {
-  const rows = db.prepare(`
-    SELECT date(datetime(voted_at / 1000, 'unixepoch')) as day, COUNT(*) as cnt
-    FROM votes
-    GROUP BY day
-    ORDER BY day ASC
-  `).all() as any[];
-  return rows.map(r => ({ date: r.day as string, count: r.cnt as number }));
+  return getDailyVotes();
 }
 
 export interface PollSummary {
@@ -426,6 +427,107 @@ export function executeReadOnlyQuery(sql: string, params?: any[]): DbQueryResult
   const rows = stmt.all() as any[];
   const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
   return { columns, rows, rowCount: rows.length };
+}
+
+export function incrementAnalyticsCounter(date: string, counter: string): void {
+  db.prepare(`
+    INSERT INTO analytics_counters (date, counter, value) VALUES (?, ?, 1)
+    ON CONFLICT(date, counter) DO UPDATE SET value = value + 1
+  `).run(date, counter);
+}
+
+function executeDailyQuery(sql: string): { date: string; count: number }[] {
+  const rows = db.prepare(sql).all() as any[];
+  return rows.map(r => ({ date: r.day as string, count: r.cnt as number }));
+}
+
+export function getDailyVotes(): { date: string; count: number }[] {
+  return executeDailyQuery(`
+    SELECT date(datetime(voted_at / 1000, 'unixepoch')) as day, COUNT(*) as cnt
+    FROM votes
+    GROUP BY day
+    ORDER BY day ASC
+  `);
+}
+
+export function getDailyUniqueVoters(): { date: string; count: number }[] {
+  return executeDailyQuery(`
+    SELECT date(datetime(voted_at / 1000, 'unixepoch')) as day, COUNT(DISTINCT voter_fingerprint) as cnt
+    FROM votes
+    GROUP BY day
+    ORDER BY day ASC
+  `);
+}
+
+export function getDailyNewPolls(): { date: string; count: number }[] {
+  return executeDailyQuery(`
+    SELECT date(datetime(created_at / 1000, 'unixepoch')) as day, COUNT(*) as cnt
+    FROM polls
+    GROUP BY day
+    ORDER BY day ASC
+  `);
+}
+
+export function getDailyActivePolls(): { date: string; count: number }[] {
+  return executeDailyQuery(`
+    SELECT date(datetime(v.voted_at / 1000, 'unixepoch')) as day, COUNT(DISTINCT v.poll_id) as cnt
+    FROM votes v
+    GROUP BY day
+    ORDER BY day ASC
+  `);
+}
+
+export function getAnalyticsCounters(fromDate: string, toDate: string): { date: string; counter: string; value: number }[] {
+  const rows = db.prepare(`
+    SELECT date, counter, value FROM analytics_counters
+    WHERE date >= ? AND date <= ?
+    ORDER BY date
+  `).all(fromDate, toDate) as any[];
+  return rows.map(r => ({ date: r.date as string, counter: r.counter as string, value: r.value as number }));
+}
+
+export function getAnalyticsSnapshot(days: number): AnalyticsSnapshot[] {
+  const toDate = new Date();
+  const fromDate = new Date(toDate.getTime() - (days - 1) * 86400000);
+  const fromStr = fromDate.toISOString().slice(0, 10);
+  const toStr = toDate.toISOString().slice(0, 10);
+
+  const votesMap = new Map<string, number>();
+  for (const r of getDailyVotes()) votesMap.set(r.date, r.count);
+
+  const uniqueMap = new Map<string, number>();
+  for (const r of getDailyUniqueVoters()) uniqueMap.set(r.date, r.count);
+
+  const newPollsMap = new Map<string, number>();
+  for (const r of getDailyNewPolls()) newPollsMap.set(r.date, r.count);
+
+  const activeMap = new Map<string, number>();
+  for (const r of getDailyActivePolls()) activeMap.set(r.date, r.count);
+
+  const countersMap = new Map<string, Map<string, number>>();
+  for (const r of getAnalyticsCounters(fromStr, toStr)) {
+    let inner = countersMap.get(r.date);
+    if (!inner) { inner = new Map(); countersMap.set(r.date, inner); }
+    inner.set(r.counter, r.value);
+  }
+
+  const snapshot: AnalyticsSnapshot[] = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(fromDate.getTime() + i * 86400000);
+    const date = d.toISOString().slice(0, 10);
+    const ci = countersMap.get(date);
+    snapshot.push({
+      date,
+      votes: votesMap.get(date) || 0,
+      uniqueVoters: uniqueMap.get(date) || 0,
+      newPolls: newPollsMap.get(date) || 0,
+      activePolls: activeMap.get(date) || 0,
+      pairingsRequested: ci?.get('pairings_requested') || 0,
+      votesSubmitted: ci?.get('votes_submitted') || 0,
+    });
+  }
+
+  return snapshot;
 }
 
 export function close(): void {

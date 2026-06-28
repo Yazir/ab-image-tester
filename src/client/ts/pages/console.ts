@@ -1,5 +1,6 @@
 import { showToast, openLightbox } from '../main';
 import { escHtml } from '../utils/sanitize';
+import type { AnalyticsSnapshot } from '../../../shared/types';
 
 let consoleKey = '';
 let currentSection = 'overview';
@@ -60,6 +61,7 @@ function renderLayout(container: HTMLElement) {
     { id: 'polls', icon: '\u2691', label: 'Poll Browser' },
     { id: 'storage', icon: '\u25A6', label: 'Storage' },
     { id: 'database', icon: '\u25A7', label: 'DB Explorer' },
+    { id: 'analytics', icon: '\u25CA', label: 'Analytics' },
   ];
 
   container.innerHTML = `
@@ -132,6 +134,7 @@ function loadSection() {
     case 'polls': loadPollBrowser(); break;
     case 'storage': loadStorage(); break;
     case 'database': loadDatabase(); break;
+    case 'analytics': loadAnalytics(); break;
   }
 }
 
@@ -626,4 +629,209 @@ function renderDatabase(main: HTMLElement, tables: any[]) {
       resultEl.innerHTML = '';
     }
   });
+}
+
+// ─── ANALYTICS ────────────────────────────────────────
+async function loadAnalytics() {
+  const main = document.getElementById('console-main')!;
+  main.innerHTML = '<div class="console-loading">Loading...</div>';
+  try {
+    const data = await consoleApi<AnalyticsSnapshot[]>('/analytics?days=30');
+    renderAnalytics(main, data);
+  } catch (e: any) {
+    main.innerHTML = `<div class="console-error">Failed to load: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderAnalytics(main: HTMLElement, data: AnalyticsSnapshot[]) {
+  const totalVotes = data.reduce((s, d) => s + d.votes, 0);
+  const totalUnique = data.reduce((s, d) => s + d.uniqueVoters, 0);
+  const totalPairings = data.reduce((s, d) => s + d.pairingsRequested, 0);
+  const totalSubmitted = data.reduce((s, d) => s + d.votesSubmitted, 0);
+  const totalActive = data.reduce((s, d) => s + d.activePolls, 0);
+  const avgActive = data.length > 0 ? Math.round((totalActive / data.length) * 10) / 10 : 0;
+  const daysWithData = data.filter(d => d.votes > 0 || d.uniqueVoters > 0 || d.newPolls > 0 || d.activePolls > 0 || d.pairingsRequested > 0 || d.votesSubmitted > 0).length;
+  const avgVotes = daysWithData > 0 ? Math.round((totalVotes / data.length) * 10) / 10 : 0;
+  const avgUnique = daysWithData > 0 ? Math.round((totalUnique / data.length) * 10) / 10 : 0;
+  const completionRate = totalPairings > 0 ? Math.round((totalSubmitted / totalPairings) * 1000) / 10 : null;
+
+  const maxVotes = Math.max(1, ...data.map(d => Math.max(d.votes, d.uniqueVoters)));
+
+  const chartBars = data.map(d => {
+    const vh = maxVotes > 0 ? Math.max(2, Math.round((d.votes / maxVotes) * 100)) : 2;
+    const uh = maxVotes > 0 ? Math.max(2, Math.round((d.uniqueVoters / maxVotes) * 100)) : 2;
+    return `
+      <div class="console-analytics-chart-day">
+        <div class="console-chart-bar" style="height:${vh}%" title="${d.date}: ${d.votes} vote(s)"><span class="console-chart-bar-label">${d.votes}</span></div>
+        <div class="console-chart-bar console-analytics-chart-bar-alt" style="height:${uh}%" title="${d.date}: ${d.uniqueVoters} unique"><span class="console-chart-bar-label">${d.uniqueVoters}</span></div>
+      </div>`;
+  });
+
+  const funnelBarWidth = totalPairings > 0 ? Math.max(1, Math.round((totalSubmitted / totalPairings) * 100)) : 0;
+
+  const renderTable = (sortBy: string, sortDir: string) => {
+    const sorted = [...data];
+    if (sortBy) {
+      sorted.sort((a, b) => {
+        const av = (a as any)[sortBy] ?? 0;
+        const bv = (b as any)[sortBy] ?? 0;
+        return sortDir === 'asc' ? av - bv : bv - av;
+      });
+    } else {
+      sorted.sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    const tbody = document.getElementById('analytics-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = sorted.length === 0
+      ? `<tr><td colspan="8" style="text-align:center;color:var(--text-dim)">No data yet</td></tr>`
+      : sorted.map(d => {
+        const cr = d.pairingsRequested > 0 ? Math.round((d.votesSubmitted / d.pairingsRequested) * 1000) / 10 : null;
+        return `
+          <tr>
+            <td style="font-family:monospace;font-size:0.8rem">${d.date}</td>
+            <td>${d.votes}</td>
+            <td>${d.uniqueVoters}</td>
+            <td>${d.newPolls}</td>
+            <td>${d.activePolls}</td>
+            <td>${d.pairingsRequested}</td>
+            <td>${d.votesSubmitted}</td>
+            <td>${cr !== null ? cr + '%' : '\u2014'}</td>
+          </tr>`;
+      }).join('');
+  };
+
+  const renderTableHead = (sortBy: string, sortDir: string) => {
+    const cols = [
+      { key: '', label: 'Date', sortable: false },
+      { key: 'votes', label: 'Votes', sortable: true },
+      { key: 'uniqueVoters', label: 'Unique Voters', sortable: true },
+      { key: 'newPolls', label: 'New Polls', sortable: true },
+      { key: 'activePolls', label: 'Active Polls', sortable: true },
+      { key: 'pairingsRequested', label: 'Req', sortable: true },
+      { key: 'votesSubmitted', label: 'Voted', sortable: true },
+      { key: '', label: 'Compl %', sortable: false },
+    ];
+    return cols.map(c => {
+      if (!c.sortable) return `<th>${c.label}</th>`;
+      const arrow = sortBy === c.key ? (sortDir === 'asc' ? '\u2191' : '\u2193') : '';
+      return `<th class="sortable" data-col="${c.key}">${c.label} <span class="sort-arrow">${arrow}</span></th>`;
+    }).join('');
+  };
+
+  let sortBy = '';
+  let sortDir = 'desc';
+
+  main.innerHTML = `
+    <h1 class="console-title">Analytics</h1>
+
+    <div class="console-cards">
+      <div class="console-card">
+        <div class="console-card-icon">\u2714</div>
+        <div class="console-card-value">${totalVotes}</div>
+        <div class="console-card-label">Total Votes</div>
+      </div>
+      <div class="console-card">
+        <div class="console-card-icon">\u263A</div>
+        <div class="console-card-value">${totalUnique}</div>
+        <div class="console-card-label">Unique Voters</div>
+      </div>
+      <div class="console-card">
+        <div class="console-card-icon">\u00F7</div>
+        <div class="console-card-value">${avgVotes}</div>
+        <div class="console-card-label">Avg Votes / Day</div>
+      </div>
+      <div class="console-card">
+        <div class="console-card-icon">\u00D7</div>
+        <div class="console-card-value">${avgUnique}</div>
+        <div class="console-card-label">Avg Uniq / Day</div>
+      </div>
+      <div class="console-card">
+        <div class="console-card-icon">%</div>
+        <div class="console-card-value">${completionRate !== null ? completionRate + '%' : '\u2014'}</div>
+        <div class="console-card-label">Completion Rate</div>
+      </div>
+      <div class="console-card">
+        <div class="console-card-icon">\u2691</div>
+        <div class="console-card-value">${avgActive}</div>
+        <div class="console-card-label">Avg Active Polls / Day</div>
+      </div>
+    </div>
+
+    <div class="console-panels">
+      <div class="console-panel console-panel-wide">
+        <h2 class="console-panel-title">Daily Votes &amp; Unique Voters</h2>
+        <div class="console-analytics-legend">
+          <span><span class="console-legend-dot" style="background:var(--accent)"></span> Votes</span>
+          <span><span class="console-legend-dot" style="background:var(--success)"></span> Unique Voters</span>
+        </div>
+        <div class="console-chart">
+          ${chartBars.join('')}
+        </div>
+        <div class="console-chart-axis">
+          <span>${data.length > 0 ? data[0].date : ''}</span>
+          <span>${data.length > 0 ? data[data.length - 1].date : ''}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="console-panels">
+      <div class="console-panel">
+        <h2 class="console-panel-title">Funnel</h2>
+        <div class="console-metrics">
+          <div class="console-metric">
+            <span class="console-metric-value">${totalPairings}</span>
+            <span class="console-metric-label">Pairings Requested</span>
+          </div>
+          <div class="console-metric">
+            <span class="console-metric-value">${totalSubmitted}</span>
+            <span class="console-metric-label">Votes Submitted</span>
+          </div>
+        </div>
+        <div class="console-analytics-funnel" style="margin-top:16px">
+          <div class="console-storage-bar">
+            <div class="console-storage-seg" style="width:${funnelBarWidth}%;background:var(--success)" title="${totalSubmitted} of ${totalPairings}"></div>
+          </div>
+          <div class="console-storage-legend">
+            <span>Completion: ${completionRate !== null ? completionRate + '%' : '\u2014'}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="console-panel" style="margin-top:20px">
+      <h2 class="console-panel-title">Daily Breakdown</h2>
+      <div class="console-table-wrap">
+        <table class="console-table" id="analytics-table">
+          <thead>
+            <tr id="analytics-thead">
+              ${renderTableHead(sortBy, sortDir)}
+            </tr>
+          </thead>
+          <tbody id="analytics-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  renderTable(sortBy, sortDir);
+
+  const bindSort = () => {
+    const thead = document.getElementById('analytics-thead')!;
+    thead.querySelectorAll('.sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const col = (th as HTMLElement).dataset.col!;
+        if (sortBy === col) {
+          sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortBy = col;
+          sortDir = 'desc';
+        }
+        document.getElementById('analytics-thead')!.innerHTML = renderTableHead(sortBy, sortDir);
+        renderTable(sortBy, sortDir);
+        bindSort();
+      });
+    });
+  };
+  bindSort();
 }

@@ -1561,6 +1561,32 @@ tr:hover td { background: rgba(124,92,252,0.05); }
   box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.15);
 }
 
+/* Analytics */
+.console-analytics-chart-day {
+  flex: 1;
+  min-width: 3px;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.console-analytics-chart-bar-alt {
+  background: var(--success) !important;
+  opacity: 0.85;
+}
+
+.console-analytics-legend {
+  display: flex;
+  gap: 24px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.console-analytics-funnel {
+  margin-top: 16px;
+}
+
 /* Responsive console */
 @media (max-width: 900px) {
   .console-sidebar {

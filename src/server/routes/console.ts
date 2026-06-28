@@ -7,6 +7,7 @@ import {
   getDbTables,
   executeReadOnlyQuery,
   getPoll,
+  getAnalyticsSnapshot,
 } from '../store';
 import { requireConsoleKey, consoleEnabled, getConsoleKey } from '../middleware/consoleAuth';
 
@@ -47,6 +48,12 @@ router.get('/polls/:pollId', (req: Request, res: Response) => {
 router.get('/storage', (_req: Request, res: Response) => {
   const stats = getStorageStats();
   res.json(stats);
+});
+
+router.get('/analytics', (req: Request, res: Response) => {
+  const days = Math.min(Math.max(parseInt(String(req.query.days)) || 30, 7), 365);
+  const snapshot = getAnalyticsSnapshot(days);
+  res.json(snapshot);
 });
 
 router.get('/db/tables', (_req: Request, res: Response) => {

@@ -3,7 +3,7 @@ import { v4 as uuid } from 'uuid';
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
-import { getPoll, getVotesForPoll, getVotesForVoter, saveVote } from '../store';
+import { getPoll, getVotesForPoll, getVotesForVoter, saveVote, incrementAnalyticsCounter } from '../store';
 import { Pairing, Selection, Image } from '../../shared/types';
 import { voteLimiter } from '../middleware/rateLimit';
 import { computeResults } from '../results';
@@ -180,6 +180,7 @@ router.get('/:pollId/pairings', voteLimiter, (req: Request, res: Response) => {
 
   const pairings = generatePairings(poll.id, fingerprint, poll.rounds, poll.images);
   const voterToken = issueVoterToken(poll.id, fingerprint);
+  incrementAnalyticsCounter(new Date().toISOString().slice(0, 10), 'pairings_requested');
   res.json({ pairings, totalRounds: pairings.length, voterToken });
 });
 
@@ -222,6 +223,7 @@ router.post('/:pollId/vote', csrfCheck, voteLimiter, (req: Request, res: Respons
   };
 
   saveVote(vote);
+  incrementAnalyticsCounter(new Date().toISOString().slice(0, 10), 'votes_submitted');
   res.status(201).json({ ok: true });
 });
 

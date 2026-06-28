@@ -56,3 +56,13 @@ export type Pairing = {
   right: Image;
   round: number;
 };
+
+export interface AnalyticsSnapshot {
+  date: string;
+  votes: number;
+  uniqueVoters: number;
+  newPolls: number;
+  activePolls: number;
+  pairingsRequested: number;
+  votesSubmitted: number;
+}
