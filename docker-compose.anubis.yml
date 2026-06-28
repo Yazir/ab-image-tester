@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/your-username/ab-image-tester:latest
+    image: ghcr.io/yazir/ab-image-tester:latest
     restart: unless-stopped
     expose:
       - "3000"
