@@ -5,7 +5,7 @@ RUN apk add --no-cache build-base python3
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN timeout 600 npm ci
 
 COPY tsconfig*.json vite.config.ts index.html ./
 COPY public/ ./public/
