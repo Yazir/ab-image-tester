@@ -26,6 +26,7 @@ db.exec(`
     container_width INTEGER NOT NULL DEFAULT 800,
     container_height INTEGER NOT NULL DEFAULT 600,
     fit_mode TEXT NOT NULL DEFAULT 'contain',
+    allow_scrolling INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL DEFAULT 0
   );
 
@@ -49,6 +50,8 @@ db.exec(`
 try { db.exec(`ALTER TABLE polls ADD COLUMN admin_token_rotated_at INTEGER NOT NULL DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE polls ADD COLUMN admin_token_created_at INTEGER NOT NULL DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE polls ADD COLUMN show_results INTEGER NOT NULL DEFAULT 1`); } catch {}
+try { db.exec(`ALTER TABLE polls ADD COLUMN allow_scrolling INTEGER NOT NULL DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE polls ADD COLUMN show_labels INTEGER NOT NULL DEFAULT 0`); } catch {}
 
 function rowToPoll(row: any): Poll {
   return {
@@ -62,7 +65,9 @@ function rowToPoll(row: any): Poll {
     containerWidth: row.container_width,
     containerHeight: row.container_height,
     fitMode: row.fit_mode,
+    allowScrolling: !!row.allow_scrolling,
     showResults: !!row.show_results,
+    showLabels: !!row.show_labels,
     createdAt: row.created_at,
   };
 }
@@ -78,11 +83,11 @@ function rowToVote(row: any): Vote {
 }
 
 const stmts = {
-  insertPoll: db.prepare(`INSERT INTO polls (id, admin_token, share_token, title, description, images, rounds, container_width, container_height, fit_mode, show_results, created_at, admin_token_created_at, admin_token_rotated_at)
-    VALUES (@id, @adminToken, @shareToken, @title, @description, @images, @rounds, @containerWidth, @containerHeight, @fitMode, @showResults, @createdAt, @createdAt, 0)`),
+  insertPoll: db.prepare(`INSERT INTO polls (id, admin_token, share_token, title, description, images, rounds, container_width, container_height, fit_mode, allow_scrolling, show_results, show_labels, created_at, admin_token_created_at, admin_token_rotated_at)
+    VALUES (@id, @adminToken, @shareToken, @title, @description, @images, @rounds, @containerWidth, @containerHeight, @fitMode, @allowScrolling, @showResults, @showLabels, @createdAt, @createdAt, 0)`),
   getPoll: db.prepare('SELECT * FROM polls WHERE id = ?'),
   updatePoll: db.prepare(`UPDATE polls SET title = @title, description = @description, images = @images, rounds = @rounds,
-    container_width = @containerWidth, container_height = @containerHeight, fit_mode = @fitMode, show_results = @showResults, share_token = @shareToken WHERE id = @id`),
+    container_width = @containerWidth, container_height = @containerHeight, fit_mode = @fitMode, allow_scrolling = @allowScrolling, show_results = @showResults, show_labels = @showLabels, share_token = @shareToken WHERE id = @id`),
   rotateToken: db.prepare(`UPDATE polls SET admin_token = @newToken, admin_token_rotated_at = @rotatedAt WHERE id = @id AND admin_token = @oldToken`),
   deletePoll: db.prepare('DELETE FROM polls WHERE id = ?'),
   insertVote: db.prepare(`INSERT INTO votes (id, poll_id, voter_fingerprint, selections, voted_at)
@@ -107,7 +112,9 @@ export function createPoll(): Poll {
     containerWidth: 800,
     containerHeight: 600,
     fitMode: 'contain',
+    allowScrolling: 0,
     showResults: 1,
+    showLabels: 0,
     createdAt: now,
   };
   stmts.insertPoll.run(params);
@@ -122,7 +129,9 @@ export function createPoll(): Poll {
     containerWidth: 800,
     containerHeight: 600,
     fitMode: 'contain',
+    allowScrolling: false,
     showResults: true,
+    showLabels: false,
     createdAt: now,
   };
 }
@@ -145,7 +154,9 @@ export function updatePoll(id: string, updates: Partial<Poll>): Poll | null {
     containerWidth: updates.containerWidth !== undefined ? updates.containerWidth : existing.containerWidth,
     containerHeight: updates.containerHeight !== undefined ? updates.containerHeight : existing.containerHeight,
     fitMode: updates.fitMode !== undefined ? updates.fitMode : existing.fitMode,
+    allowScrolling: updates.allowScrolling !== undefined ? (updates.allowScrolling ? 1 : 0) : (existing.allowScrolling ? 1 : 0),
     showResults: updates.showResults !== undefined ? (updates.showResults ? 1 : 0) : (existing.showResults ? 1 : 0),
+    showLabels: updates.showLabels !== undefined ? (updates.showLabels ? 1 : 0) : (existing.showLabels ? 1 : 0),
     shareToken: updates.shareToken !== undefined ? updates.shareToken : existing.shareToken,
   };
 

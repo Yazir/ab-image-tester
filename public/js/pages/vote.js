@@ -122,14 +122,15 @@ function renderStage() {
     stage.style.setProperty('--container-w', `${p.containerWidth}px`);
     stage.style.setProperty('--container-h', `${p.containerHeight}px`);
     stage.style.setProperty('--fit-mode', p.fitMode);
+    const scrollClass = p.allowScrolling ? ' allow-scroll' : '';
     stage.innerHTML = `
     <div class="round-counter">Round ${state.currentRound + 1} / ${state.pairings.length}</div>
-    <div class="vote-option left" id="vote-left" data-side="left">
+    <div class="vote-option left${scrollClass}" id="vote-left" data-side="left">
       <img src="/uploads/${pairing.left.filename}" alt="${escHtml(pairing.left.originalName)}" draggable="false">
       <div class="option-label">${escHtml(imgLabel(p.images, pairing.left.id))}</div>
     </div>
     <div class="vote-vs">VS</div>
-    <div class="vote-option right" id="vote-right" data-side="right">
+    <div class="vote-option right${scrollClass}" id="vote-right" data-side="right">
       <img src="/uploads/${pairing.right.filename}" alt="${escHtml(pairing.right.originalName)}" draggable="false">
       <div class="option-label">${escHtml(imgLabel(p.images, pairing.right.id))}</div>
     </div>

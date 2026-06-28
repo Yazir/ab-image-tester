@@ -15,6 +15,8 @@ export interface Poll {
     containerWidth: number;
     containerHeight: number;
     fitMode: FitMode;
+    allowScrolling: boolean;
+    showResults: boolean;
     createdAt: number;
 }
 export interface Selection {

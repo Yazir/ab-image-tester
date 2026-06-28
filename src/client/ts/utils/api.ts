@@ -19,16 +19,22 @@ export function api<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 let _maxFileSize = 10 * 1024 * 1024;
+let _maxImages = 50;
 export let adminKeyRequired = false;
 
 export function maxFileSize(): number {
   return _maxFileSize;
 }
 
+export function maxImages(): number {
+  return _maxImages;
+}
+
 export async function loadConfig(): Promise<void> {
   try {
-    const cfg = await api<{ maxFileSize: number; adminKeyRequired: boolean }>('/polls/config');
+    const cfg = await api<{ maxFileSize: number; maxImages: number; adminKeyRequired: boolean }>('/polls/config');
     _maxFileSize = cfg.maxFileSize;
+    _maxImages = cfg.maxImages;
     adminKeyRequired = cfg.adminKeyRequired;
   } catch {}
 }

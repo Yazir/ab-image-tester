@@ -23,7 +23,6 @@ interface Bucket {
 }
 
 const buckets = new Map<string, Bucket>();
-const UPLOAD_CAPACITY = 30;
 const UPLOAD_REFILL_RATE = 2;
 const MAX_BUCKETS = 10_000;
 
@@ -36,29 +35,33 @@ setInterval(() => {
   }
 }, 60_000);
 
-export function uploadLeakyBucket(req: Request, res: Response, next: NextFunction) {
-  const key = req.ip || 'unknown';
-  const now = Date.now();
-  let bucket = buckets.get(key);
+export function createUploadLeakyBucket(maxImages: number) {
+  const capacity = maxImages;
 
-  if (!bucket) {
-    if (buckets.size >= MAX_BUCKETS) {
-      return res.status(429).json({ error: 'Service busy. Try again later.' });
+  return function uploadLeakyBucket(req: Request, res: Response, next: NextFunction) {
+    const key = req.ip || 'unknown';
+    const now = Date.now();
+    let bucket = buckets.get(key);
+
+    if (!bucket) {
+      if (buckets.size >= MAX_BUCKETS) {
+        return res.status(429).json({ error: 'Service busy. Try again later.' });
+      }
+      bucket = { tokens: capacity, lastRefill: now };
+      buckets.set(key, bucket);
+    } else {
+      const elapsed = (now - bucket.lastRefill) / 1000;
+      bucket.tokens = Math.min(capacity, bucket.tokens + elapsed * UPLOAD_REFILL_RATE);
+      bucket.lastRefill = now;
     }
-    bucket = { tokens: UPLOAD_CAPACITY, lastRefill: now };
-    buckets.set(key, bucket);
-  } else {
-    const elapsed = (now - bucket.lastRefill) / 1000;
-    bucket.tokens = Math.min(UPLOAD_CAPACITY, bucket.tokens + elapsed * UPLOAD_REFILL_RATE);
-    bucket.lastRefill = now;
-  }
 
-  if (bucket.tokens >= 1) {
-    bucket.tokens -= 1;
-    next();
-  } else {
-    res.status(429).json({ error: 'Upload rate limit exceeded. Slow down.' });
-  }
+    if (bucket.tokens >= 1) {
+      bucket.tokens -= 1;
+      next();
+    } else {
+      res.status(429).json({ error: 'Upload rate limit exceeded. Slow down.' });
+    }
+  };
 }
 
 interface IPBan {

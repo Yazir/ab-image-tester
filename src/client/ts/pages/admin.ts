@@ -1,5 +1,5 @@
 import { showToast, openLightbox } from '../main';
-import { api, authHeaders, maxFileSize, loadConfig } from '../utils/api';
+import { api, authHeaders, maxFileSize, maxImages, loadConfig } from '../utils/api';
 import { escHtml, escAttr, escInput } from '../utils/sanitize';
 import type { Poll, Image, VoterInfo, Selection, FitMode, Pairing } from '../types';
 
@@ -296,7 +296,7 @@ function renderImagesTab(poll: Poll) {
         </div>
       `).join('')}
     </div>
-    <p style="color:var(--text-dim);font-size:0.8rem">${poll.images.length} / 50 images</p>
+    <p style="color:var(--text-dim);font-size:0.8rem">${poll.images.length} / ${maxImages()} images</p>
   `;
 
   setupUpload(el as HTMLElement, poll);
@@ -328,7 +328,7 @@ function renderImagesTab(poll: Poll) {
 }
 
 function setupUpload(el: HTMLElement, poll: Poll) {
-  const MAX = 50;
+  const MAX = maxImages();
   const zone = document.getElementById('upload-zone')!;
   const input = document.getElementById('file-input')! as HTMLInputElement;
   const queue: File[] = [];
@@ -468,6 +468,12 @@ function renderSettingsTab(poll: Poll) {
         <label for="poll-show-results" class="checkbox-label">Show results to voters after voting</label>
       </div>
     </div>
+    <div class="form-group">
+      <div class="checkbox-row">
+        <input type="checkbox" id="poll-show-labels" ${poll.showLabels ? 'checked' : ''}>
+        <label for="poll-show-labels" class="checkbox-label">Show image numbers and filenames during voting</label>
+      </div>
+    </div>
   `;
 
   const collect = () => ({
@@ -475,6 +481,7 @@ function renderSettingsTab(poll: Poll) {
     description: (document.getElementById('poll-desc') as HTMLTextAreaElement).value,
     rounds: parseInt((document.getElementById('poll-rounds') as HTMLInputElement).value, 10),
     showResults: (document.getElementById('poll-show-results') as HTMLInputElement).checked,
+    showLabels: (document.getElementById('poll-show-labels') as HTMLInputElement).checked,
   });
 
   let saveTimer: ReturnType<typeof setTimeout>;
@@ -499,6 +506,10 @@ function renderSettingsTab(poll: Poll) {
   document.getElementById('poll-desc')!.addEventListener('input', scheduleSave);
   document.getElementById('poll-rounds')!.addEventListener('input', scheduleSave);
   document.getElementById('poll-show-results')!.addEventListener('change', () => {
+    clearTimeout(saveTimer);
+    doSave();
+  });
+  document.getElementById('poll-show-labels')!.addEventListener('change', () => {
     clearTimeout(saveTimer);
     doSave();
   });
@@ -539,6 +550,12 @@ function renderSizeTab(poll: Poll) {
             <button class="size-fit-btn ${poll.fitMode === 'cover' ? 'active' : ''}" data-fit="cover">Fill</button>
             <button class="size-fit-btn ${poll.fitMode === 'scale-down' ? 'active' : ''}" data-fit="scale-down">Native</button>
           </div>
+        </div>
+        <div class="size-row">
+          <label class="size-check-label">
+            <input type="checkbox" id="allow-scrolling" ${poll.allowScrolling ? 'checked' : ''}>
+            Allow scrolling (tall images scroll vertically)
+          </label>
         </div>
         <div class="size-row">
           ${firstImg ? `<button class="btn btn-secondary" id="detect-size" style="font-size:0.8rem">Detect from images</button>` : ''}
@@ -582,12 +599,18 @@ function renderSizeTab(poll: Poll) {
     if (!inner) return;
     const w = parseInt(wInput.value, 10) || 200;
     const h = parseInt(hInput.value, 10) || 200;
+    const scroll = (document.getElementById('allow-scrolling') as HTMLInputElement).checked;
     inner.style.width = w + 'px';
-    inner.style.height = h + 'px';
-    const img = inner.querySelector('img');
-    if (img) img.style.objectFit = fitMode;
+    inner.style.height = scroll ? 'auto' : (h + 'px');
+    inner.style.maxHeight = scroll ? h + 'px' : '';
+    inner.style.overflowY = scroll ? 'auto' : 'hidden';
+    const img = inner.querySelector('img') as HTMLImageElement;
+    if (img) {
+      img.style.objectFit = fitMode;
+      img.style.height = scroll ? 'auto' : '100%';
+    }
     const dims = inner.querySelector('.preview-panel-dims')!;
-    dims.textContent = `${w} \u00d7 ${h} \u00b7 ${fitMode === 'contain' ? 'fit' : fitMode === 'scale-down' ? 'native' : 'cover'}`;
+    dims.textContent = `${w} \u00d7 ${h} \u00b7 ${fitMode === 'contain' ? 'fit' : fitMode === 'scale-down' ? 'native' : 'cover'}${scroll ? ' \u00b7 scroll' : ''}`;
   };
 
   const syncFromW = () => { if (arLocked) { hInput.value = Math.round(parseInt(wInput.value, 10) / ar).toString(); updatePreview(); } };
@@ -641,10 +664,16 @@ function renderSizeTab(poll: Poll) {
     });
   });
 
+  document.getElementById('allow-scrolling')!.addEventListener('change', () => {
+    updatePreview();
+    saveSize();
+  });
+
   const collectSize = () => ({
     containerWidth: parseInt(wInput.value, 10),
     containerHeight: parseInt(hInput.value, 10),
     fitMode,
+    allowScrolling: (document.getElementById('allow-scrolling') as HTMLInputElement).checked,
   });
 
   let sizeTimer: ReturnType<typeof setTimeout>;
@@ -685,6 +714,7 @@ function renderSizeTab(poll: Poll) {
   document.getElementById('reset-size')?.addEventListener('click', () => {
     wInput.value = '800'; hInput.value = '600';
     fitMode = 'contain';
+    (document.getElementById('allow-scrolling') as HTMLInputElement).checked = false;
     el.querySelectorAll('.size-fit-btn').forEach(b => b.classList.remove('active'));
     el.querySelector('[data-fit="contain"]')?.classList.add('active');
     updatePreview();

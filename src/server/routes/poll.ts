@@ -5,14 +5,14 @@ import path from 'path';
 import fs from 'fs';
 import { createPoll, getPoll, updatePoll, generateShareToken, deletePoll, rotateAdminToken } from '../store';
 import { requireAdmin, requireAdminOrShare } from '../middleware/auth';
-import { uploadLeakyBucket, createPollGuard, recordPollKeyFailure, clearPollKeyFailures } from '../middleware/rateLimit';
+import { createUploadLeakyBucket, createPollGuard, recordPollKeyFailure, clearPollKeyFailures } from '../middleware/rateLimit';
 import { Image } from '../../shared/types';
 import { processImage } from '../utils/imageProcessor';
 
 const router = Router();
 
 const UPLOADS_DIR = path.resolve(__dirname, '../../../data/uploads');
-const MAX_IMAGES = 50;
+const MAX_IMAGES = parseInt(process.env.MAX_IMAGES || '', 10) || 50;
 const ALLOWED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']);
 const MAX_FILE_SIZE = parseFileSizeEnv(process.env.MAX_FILE_SIZE, 10 * 1024 * 1024);
 const POLL_CREATE_KEY = process.env.POLL_CREATE_KEY || null;
@@ -98,7 +98,7 @@ router.post('/', createPollGuard, (req: Request, res: Response) => {
 
 // Client config
 router.get('/config', (_req: Request, res: Response) => {
-  res.json({ maxFileSize: MAX_FILE_SIZE, adminKeyRequired: !!POLL_CREATE_KEY });
+  res.json({ maxFileSize: MAX_FILE_SIZE, maxImages: MAX_IMAGES, adminKeyRequired: !!POLL_CREATE_KEY });
 });
 
 // Get poll (admin)
@@ -118,7 +118,7 @@ router.get('/view/:pollId', (req: Request, res: Response) => {
 
 // Update poll settings
 router.patch('/:pollId', requireAdmin, (req: Request, res: Response) => {
-  const allowed = ['title', 'description', 'rounds', 'containerWidth', 'containerHeight', 'fitMode', 'showResults'];
+  const allowed = ['title', 'description', 'rounds', 'containerWidth', 'containerHeight', 'fitMode', 'allowScrolling', 'showResults'];
   const updates: Record<string, unknown> = {};
   for (const key of allowed) {
     if (req.body[key] === undefined) continue;
@@ -144,7 +144,8 @@ router.patch('/:pollId', requireAdmin, (req: Request, res: Response) => {
         if (!['contain', 'cover', 'scale-down'].includes(req.body[key])) return res.status(400).json({ error: 'fitMode must be contain, cover, or scale-down' });
         break;
       case 'showResults':
-        if (typeof req.body[key] !== 'boolean') return res.status(400).json({ error: 'showResults must be a boolean' });
+      case 'allowScrolling':
+        if (typeof req.body[key] !== 'boolean') return res.status(400).json({ error: `${key} must be a boolean` });
         break;
     }
     updates[key] = req.body[key];
@@ -155,7 +156,7 @@ router.patch('/:pollId', requireAdmin, (req: Request, res: Response) => {
 });
 
 // Upload image
-router.post('/:pollId/upload', requireAdmin, uploadLeakyBucket, upload.single('image'), (req: Request, res: Response) => {
+router.post('/:pollId/upload', requireAdmin, createUploadLeakyBucket(MAX_IMAGES), upload.single('image'), (req: Request, res: Response) => {
   const poll = getPoll(req.params.pollId as string);
   if (!poll) return res.status(404).json({ error: 'Not found' });
   if (poll.images.length >= MAX_IMAGES) {

@@ -317,6 +317,22 @@ label {
   color: var(--text-dim);
 }
 
+.size-check-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+.size-check-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .size-fit-group {
   display: flex;
   border: 1px solid var(--border);
@@ -418,7 +434,7 @@ label {
 
 .vote-stage {
   position: fixed;
-  top: 57px;
+  top: 93px;
   left: 0;
   right: 0;
   bottom: 0;
@@ -493,6 +509,17 @@ label {
   font-weight: 600;
 }
 
+.vote-option.allow-scroll {
+  height: auto;
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  align-items: flex-start;
+}
+.vote-option.allow-scroll img {
+  height: auto;
+  object-fit: contain;
+}
+
 .vote-vs {
   position: absolute;
   top: 50%;
@@ -505,18 +532,6 @@ label {
   text-shadow: 0 0 20px rgba(0,0,0,0.8);
 }
 
-.round-counter {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.9rem;
-  color: var(--text-dim);
-  background: rgba(0,0,0,0.6);
-  padding: 4px 16px;
-  border-radius: 20px;
-  z-index: 15;
-}
 
 .vote-option.smack-winner {
   animation: smackWinner 0.5s ease-out forwards;
@@ -543,18 +558,31 @@ label {
 
 .progress-sidebar {
   position: fixed;
+  left: 0;
   right: 0;
-  top: 0;
-  bottom: 0;
-  width: 40px;
+  top: 57px;
+  height: 36px;
   background: var(--surface);
-  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  padding-top: 20px;
-  gap: 4px;
+  justify-content: space-between;
+  padding: 0 16px;
+  gap: 6px;
   z-index: 20;
+}
+.progress-dots {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.progress-label {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .progress-dot {
   width: 10px;
@@ -935,11 +963,11 @@ tr:hover td { background: rgba(124,92,252,0.05); }
   .vote-vs { font-size: 1.2rem; }
   .vote-option { position: relative; width: 100%; height: 40vh; max-width: 100%; top: auto; bottom: auto; left: auto; right: auto; margin-bottom: 8px; flex-shrink: 1; }
   .vote-stage { position: relative; top: auto; left: auto; right: auto; bottom: auto; min-height: calc(100vh - 57px); display: flex; flex-direction: column; gap: 8px; padding: 16px; justify-content: flex-start; }
-  .round-counter { position: fixed; top: 66px; left: 50%; transform: translateX(-50%); }
   .size-editor { padding-right: 0; }
   .preview-panel { position: relative; top: auto; right: auto; width: 100%; height: 300px; border-left: none; border-top: 1px solid var(--border); }
-  .progress-sidebar { width: 32px; }
+  .progress-sidebar { height: 32px; padding: 0 8px; gap: 2px; }
   .progress-dot { width: 8px; height: 8px; }
+  .progress-label { font-size: 0.75rem; }
 }
 
 /* ─── Console ──────────────────────────────────────── */

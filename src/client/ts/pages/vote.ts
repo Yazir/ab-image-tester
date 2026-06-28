@@ -102,13 +102,23 @@ function renderProgressSidebar() {
   bar.id = 'progress-sidebar';
   bar.className = 'progress-sidebar';
 
+  const dots = document.createElement('div');
+  dots.className = 'progress-dots';
+
   for (let i = 0; i < state.pairings.length; i++) {
     const dot = document.createElement('div');
     dot.className = 'progress-dot';
     dot.id = `progress-dot-${i}`;
     if (i === 0) dot.classList.add('current');
-    bar.appendChild(dot);
+    dots.appendChild(dot);
   }
+  bar.appendChild(dots);
+
+  const label = document.createElement('span');
+  label.className = 'progress-label';
+  label.id = 'progress-label';
+  label.textContent = `Rounds 1 / ${state.pairings.length}`;
+  bar.appendChild(label);
 
   document.body.appendChild(bar);
 }
@@ -120,6 +130,10 @@ function updateProgress() {
     dot.className = 'progress-dot';
     if (i < state.currentRound) dot.classList.add('done');
     if (i === state.currentRound) dot.classList.add('current');
+  }
+  const label = document.getElementById('progress-label');
+  if (label) {
+    label.textContent = `Rounds ${state.currentRound + 1} / ${state.pairings.length}`;
   }
 }
 
@@ -145,16 +159,16 @@ function renderStage() {
   stage.style.setProperty('--container-w', `${p.containerWidth}px`);
   stage.style.setProperty('--container-h', `${p.containerHeight}px`);
   stage.style.setProperty('--fit-mode', p.fitMode);
+  const scrollClass = p.allowScrolling ? ' allow-scroll' : '';
   stage.innerHTML = `
-    <div class="round-counter">Round ${state.currentRound + 1} / ${state.pairings.length}</div>
-    <div class="vote-option left" id="vote-left" data-side="left">
+    <div class="vote-option left${scrollClass}" id="vote-left" data-side="left">
       <img src="/uploads/${escAttr(pairing.left.filename)}" alt="${escHtml(pairing.left.originalName)}" draggable="false">
-      <div class="option-label">${escHtml(imgLabel(p.images, pairing.left.id))}</div>
+      ${p.showLabels ? `<div class="option-label">${escHtml(imgLabel(p.images, pairing.left.id))}</div>` : ''}
     </div>
     <div class="vote-vs">VS</div>
-    <div class="vote-option right" id="vote-right" data-side="right">
+    <div class="vote-option right${scrollClass}" id="vote-right" data-side="right">
       <img src="/uploads/${escAttr(pairing.right.filename)}" alt="${escHtml(pairing.right.originalName)}" draggable="false">
-      <div class="option-label">${escHtml(imgLabel(p.images, pairing.right.id))}</div>
+      ${p.showLabels ? `<div class="option-label">${escHtml(imgLabel(p.images, pairing.right.id))}</div>` : ''}
     </div>
   `;
   document.body.appendChild(stage);
