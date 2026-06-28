@@ -5,20 +5,39 @@ on:
     branches: [main]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      push:
+        description: 'Push image to GHCR'
+        type: boolean
+        default: true
+      platforms:
+        description: 'Target platforms (comma-separated)'
+        type: string
+        default: 'linux/amd64'
 
 env:
   REGISTRY: ghcr.io
 
 jobs:
+  matrix-prep:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PLATFORMS="${{ inputs.platforms }}"
+          else
+            PLATFORMS="linux/amd64,linux/arm64"
+          fi
+          echo "matrix=$(echo "$PLATFORMS" | jq -R -s -c 'split(",") | map({platform: ., runner: (if . == "linux/arm64" then "ubuntu-24.04-arm" else "ubuntu-latest" end)})')" >> $GITHUB_OUTPUT
+
   build:
+    needs: matrix-prep
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: linux/amd64
-            runner: ubuntu-latest
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
+      matrix: ${{ fromJson(needs.matrix-prep.outputs.matrix) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     permissions:
@@ -54,7 +73,7 @@ jobs:
         timeout-minutes: 10
         with:
           context: .
-          push: true
+          push: ${{ github.event_name != 'workflow_dispatch' || inputs.push }}
           platforms: ${{ matrix.platform }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
