@@ -202,6 +202,221 @@ export function addWaitlistEmail(email: string): boolean {
   return result.changes > 0;
 }
 
+export interface ConsoleOverview {
+  totalPolls: number;
+  totalVotes: number;
+  totalImages: number;
+  totalVoters: number;
+  averageImagesPerPoll: number;
+  averageVotesPerPoll: number;
+  averageRoundsPerPoll: number;
+  latestPoll: { id: string; title: string; createdAt: number } | null;
+  oldestPoll: { id: string; title: string; createdAt: number } | null;
+}
+
+export function getConsoleOverview(): ConsoleOverview {
+  const pollStats = db.prepare(`
+    SELECT
+      COUNT(*) as totalPolls,
+      AVG(json_array_length(images)) as avgImages,
+      AVG(rounds) as avgRounds,
+      MIN(created_at) as oldestCreatedAt,
+      MAX(created_at) as latestCreatedAt
+    FROM polls
+  `).get() as any;
+
+  const voteStats = db.prepare(`SELECT COUNT(*) as totalVotes, COUNT(DISTINCT voter_fingerprint) as totalVoters FROM votes`).get() as any;
+  const imageTotal = db.prepare(`SELECT SUM(json_array_length(images)) as totalImages FROM polls`).get() as any;
+
+  let latestPoll: { id: string; title: string; createdAt: number } | null = null;
+  let oldestPoll: { id: string; title: string; createdAt: number } | null = null;
+
+  if (pollStats.totalPolls > 0) {
+    const latest = db.prepare(`SELECT id, title, created_at FROM polls ORDER BY created_at DESC LIMIT 1`).get() as any;
+    if (latest) {
+      latestPoll = { id: latest.id, title: latest.title, createdAt: latest.created_at };
+    }
+    const oldest = db.prepare(`SELECT id, title, created_at FROM polls ORDER BY created_at ASC LIMIT 1`).get() as any;
+    if (oldest) {
+      oldestPoll = { id: oldest.id, title: oldest.title, createdAt: oldest.created_at };
+    }
+  }
+
+  const tp = (pollStats.totalPolls as number) || 0;
+
+  return {
+    totalPolls: tp,
+    totalVotes: (voteStats.totalVotes as number) || 0,
+    totalImages: (imageTotal.totalImages as number) || 0,
+    totalVoters: (voteStats.totalVoters as number) || 0,
+    averageImagesPerPoll: tp > 0 ? Math.round(((pollStats.avgImages as number) || 0) * 10) / 10 : 0,
+    averageVotesPerPoll: tp > 0 ? Math.round(((voteStats.totalVotes as number) / tp) * 10) / 10 : 0,
+    averageRoundsPerPoll: tp > 0 ? Math.round(((pollStats.avgRounds as number) || 0) * 10) / 10 : 0,
+    latestPoll,
+    oldestPoll,
+  };
+}
+
+export interface DailyVote {
+  date: string;
+  count: number;
+}
+
+export function getVotesByDay(): DailyVote[] {
+  const rows = db.prepare(`
+    SELECT date(datetime(voted_at / 1000, 'unixepoch')) as day, COUNT(*) as cnt
+    FROM votes
+    GROUP BY day
+    ORDER BY day ASC
+  `).all() as any[];
+  return rows.map(r => ({ date: r.day as string, count: r.cnt as number }));
+}
+
+export interface PollSummary {
+  id: string;
+  title: string;
+  description: string;
+  imageCount: number;
+  voteCount: number;
+  rounds: number;
+  showResults: boolean;
+  createdAt: number;
+}
+
+export function getPollsSummary(search?: string, sortBy?: string, sortDir?: string): PollSummary[] {
+  let sql = `
+    SELECT p.id, p.title, p.description, p.rounds, p.show_results, p.created_at,
+           json_array_length(p.images) as imageCount,
+           COALESCE(v.voteCount, 0) as voteCount
+    FROM polls p
+    LEFT JOIN (SELECT poll_id, COUNT(*) as voteCount FROM votes GROUP BY poll_id) v ON v.poll_id = p.id
+  `;
+  const params: any[] = [];
+
+  if (search) {
+    sql += ` WHERE p.title LIKE ? OR p.description LIKE ? OR p.id LIKE ?`;
+    const term = `%${search}%`;
+    params.push(term, term, term);
+  }
+
+  const sortCol = (sortBy && ['title', 'imageCount', 'voteCount', 'created_at', 'rounds'].includes(sortBy))
+    ? sortBy : 'created_at';
+  const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
+  sql += ` ORDER BY ${sortCol} ${dir}`;
+
+  const rows = db.prepare(sql).all(...params) as any[];
+  return rows.map(r => ({
+    id: r.id,
+    title: r.title,
+    description: r.description,
+    imageCount: r.imageCount,
+    voteCount: r.voteCount,
+    rounds: r.rounds,
+    showResults: !!r.show_results,
+    createdAt: r.created_at,
+  }));
+}
+
+export interface StorageStats {
+  dbSizeBytes: number;
+  uploadDirSizeBytes: number;
+  uploadFileCount: number;
+  largestFiles: { name: string; size: number }[];
+}
+
+export function getStorageStats(): StorageStats {
+  const dbStats = fs.statSync(DB_PATH);
+  const uploadsDir = path.join(dataDir, 'uploads');
+  let uploadDirSizeBytes = 0;
+  let uploadFileCount = 0;
+  const fileSizes: { name: string; size: number }[] = [];
+
+  if (fs.existsSync(uploadsDir)) {
+    const walk = (dir: string) => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(fullPath);
+        } else {
+          try {
+            const st = fs.statSync(fullPath);
+            uploadDirSizeBytes += st.size;
+            uploadFileCount++;
+            fileSizes.push({ name: entry.name, size: st.size });
+          } catch {}
+        }
+      }
+    };
+    walk(uploadsDir);
+  }
+
+  fileSizes.sort((a, b) => b.size - a.size);
+  const largestFiles = fileSizes.slice(0, 10);
+
+  return {
+    dbSizeBytes: dbStats.size,
+    uploadDirSizeBytes,
+    uploadFileCount,
+    largestFiles,
+  };
+}
+
+export interface DbTableInfo {
+  name: string;
+  columns: { name: string; type: string; notnull: boolean; pk: boolean }[];
+  rowCount: number;
+}
+
+export function getDbTables(): DbTableInfo[] {
+  const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`).all() as any[];
+  return tables.map((t: any) => {
+    const cols = db.prepare(`PRAGMA table_info('${t.name}')`).all() as any[];
+    const rowCount = (db.prepare(`SELECT COUNT(*) as cnt FROM [${t.name}]`).get() as any).cnt;
+    return {
+      name: t.name,
+      columns: cols.map((c: any) => ({
+        name: c.name,
+        type: c.type,
+        notnull: !!c.notnull,
+        pk: !!c.pk,
+      })),
+      rowCount,
+    };
+  });
+}
+
+export interface DbQueryResult {
+  columns: string[];
+  rows: Record<string, any>[];
+  rowCount: number;
+}
+
+export function executeReadOnlyQuery(sql: string, params?: any[]): DbQueryResult {
+  const trimmed = sql.trim();
+  const upper = trimmed.slice(0, 30).toUpperCase().replace(/\s/g, ' ');
+  if (!upper.startsWith('SELECT') && !upper.startsWith('PRAGMA') && !upper.startsWith('EXPLAIN')) {
+    throw new Error('Only SELECT, PRAGMA, and EXPLAIN queries allowed');
+  }
+
+  const dangerous = /\b(DROP|DELETE|INSERT|UPDATE|ALTER|CREATE|ATTACH|DETACH|REINDEX|VACUUM)\b/i;
+  if (dangerous.test(trimmed)) {
+    throw new Error('Write operations are not allowed');
+  }
+
+  if (params && params.length > 0) {
+    const stmt = db.prepare(trimmed);
+    const rows = stmt.all(...params) as any[];
+    const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+    return { columns, rows, rowCount: rows.length };
+  }
+
+  const stmt = db.prepare(trimmed);
+  const rows = stmt.all() as any[];
+  const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+  return { columns, rows, rowCount: rows.length };
+}
+
 export function close(): void {
   db.close();
 }

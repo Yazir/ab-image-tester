@@ -5,7 +5,9 @@ import pollRoutes from './routes/poll';
 import voteRoutes from './routes/vote';
 import adminRoutes from './routes/admin';
 import waitlistRoutes from './routes/waitlist';
+import consoleRoutes from './routes/console';
 import { generalLimiter } from './middleware/rateLimit';
+import { consoleEnabled } from './middleware/consoleAuth';
 import { close as closeDb } from './store';
 
 export function createApp({ isDev } = { isDev: false }): express.Application {
@@ -31,6 +33,10 @@ export function createApp({ isDev } = { isDev: false }): express.Application {
   app.use('/api/polls', voteRoutes);
   app.use('/api/polls', adminRoutes);
   app.use('/api/waitlist', waitlistRoutes);
+
+  if (consoleEnabled()) {
+    app.use('/api/console', consoleRoutes);
+  }
 
   const DATA_DIR = process.env.TEST_DATA_DIR || path.resolve(__dirname, '../../data');
   const uploadsDir = path.join(DATA_DIR, 'uploads');

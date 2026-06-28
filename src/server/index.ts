@@ -42,6 +42,10 @@ app.get('/vote/{*path}', (_req, res) => {
   res.sendFile(path.join(staticDir, 'index.html'));
 });
 
+app.get('/console', (_req, res) => {
+  res.sendFile(path.join(staticDir, 'index.html'));
+});
+
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });

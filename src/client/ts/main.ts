@@ -1,6 +1,7 @@
 import { renderHome } from './pages/home';
 import { renderAdmin } from './pages/admin';
 import { renderVote } from './pages/vote';
+import { renderConsole } from './pages/console';
 import { escHtml, escAttr } from './utils/sanitize';
 
 const content = document.getElementById('app-content')!;
@@ -19,6 +20,8 @@ function route() {
 
   if (path === '/') {
     renderHome(content);
+  } else if (path === '/console') {
+    renderConsole(content);
   } else if (path.startsWith('/admin/')) {
     const pollId = path.split('/admin/')[1];
     renderAdmin(content, pollId);
