@@ -760,8 +760,176 @@ tr:hover td { background: rgba(124,92,252,0.05); }
   to { opacity: 1; }
 }
 
+/* GitHub link */
+.github-link {
+  position: fixed;
+  bottom: 12px;
+  left: 16px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  opacity: 0.5;
+  transition: opacity var(--transition);
+  z-index: 50;
+}
+.github-link:hover { opacity: 0.8; }
+
+/* Landing page (admin key required mode) */
+.landing-page {
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.landing-sidebar {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  width: 240px;
+  padding: 10px 12px;
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 40;
+}
+
+.landing-sidebar.open {
+  display: flex;
+}
+
+.poll-create-toggle {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface2);
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 41;
+  transition: color var(--transition), background var(--transition);
+}
+
+.poll-create-toggle:hover {
+  color: var(--text);
+  background: var(--border);
+}
+
+.landing-sidebar hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0;
+}
+
+.landing-sidebar h3 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.landing-sidebar .form-group {
+  margin-bottom: 0;
+}
+
+.landing-sidebar label {
+  font-size: 0.7rem;
+  margin-bottom: 3px;
+}
+
+.landing-sidebar input {
+  padding: 5px 36px 5px 8px;
+  font-size: 0.78rem;
+}
+
+.landing-sidebar .btn {
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  align-self: stretch;
+  justify-content: center;
+}
+
+.landing-center {
+  padding: 40px;
+}
+
+.landing-hero {
+  max-width: 580px;
+  text-align: center;
+}
+
+.landing-hero h1 {
+  font-size: 2.2rem;
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.landing-hero .tagline {
+  color: var(--text-dim);
+  font-size: 1.05rem;
+  margin-bottom: 8px;
+}
+
+.landing-hero .subtitle {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin-bottom: 36px;
+  line-height: 1.6;
+}
+
+.waitlist-form {
+  display: flex;
+  gap: 8px;
+}
+
+.waitlist-form input {
+  flex: 1;
+  padding: 10px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.waitlist-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.waitlist-form .btn {
+  flex-shrink: 0;
+}
+
+.waitlist-success {
+  color: var(--success);
+  font-size: 0.85rem;
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+.waitlist-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin-top: 8px;
+  font-weight: 600;
+}
+
 /* Responsive */
 @media (max-width: 700px) {
+  .landing-sidebar.open { width: calc(100% - 24px); bottom: 52px; right: 12px; left: 12px; }
+  .landing-page { min-height: auto; padding-top: 20px; }
+  .landing-hero h1 { font-size: 1.6rem; }
+  .waitlist-form { flex-direction: column; }
   .vote-hero { text-align: left; }
   .vote-hero .image-count { margin-bottom: 16px; }
   .vote-vs { font-size: 1.2rem; }
@@ -772,4 +940,5 @@ tr:hover td { background: rgba(124,92,252,0.05); }
   .preview-panel { position: relative; top: auto; right: auto; width: 100%; height: 300px; border-left: none; border-top: 1px solid var(--border); }
   .progress-sidebar { width: 32px; }
   .progress-dot { width: 8px; height: 8px; }
+}
 }

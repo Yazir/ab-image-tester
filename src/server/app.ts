@@ -4,6 +4,7 @@ import fs from 'fs';
 import pollRoutes from './routes/poll';
 import voteRoutes from './routes/vote';
 import adminRoutes from './routes/admin';
+import waitlistRoutes from './routes/waitlist';
 import { generalLimiter } from './middleware/rateLimit';
 import { close as closeDb } from './store';
 
@@ -24,11 +25,12 @@ export function createApp({ isDev } = { isDev: false }): express.Application {
   app.set('trust proxy', 1);
   app.use(securityHeaders);
   app.use(express.json({ limit: '1mb' }));
-  app.use(generalLimiter);
+  app.use('/api', generalLimiter);
 
   app.use('/api/polls', pollRoutes);
   app.use('/api/polls', voteRoutes);
   app.use('/api/polls', adminRoutes);
+  app.use('/api/waitlist', waitlistRoutes);
 
   const DATA_DIR = process.env.TEST_DATA_DIR || path.resolve(__dirname, '../../data');
   const uploadsDir = path.join(DATA_DIR, 'uploads');

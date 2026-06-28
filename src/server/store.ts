@@ -39,6 +39,11 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_votes_poll_voter ON votes(poll_id, voter_fingerprint);
+
+  CREATE TABLE IF NOT EXISTS waitlist (
+    email TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL DEFAULT 0
+  );
 `);
 
 try { db.exec(`ALTER TABLE polls ADD COLUMN admin_token_rotated_at INTEGER NOT NULL DEFAULT 0`); } catch {}
@@ -84,6 +89,7 @@ const stmts = {
     VALUES (@id, @pollId, @voterFingerprint, @selections, @votedAt)`),
   getVotesForPoll: db.prepare('SELECT * FROM votes WHERE poll_id = ?'),
   getVoteForVoter: db.prepare('SELECT * FROM votes WHERE poll_id = ? AND voter_fingerprint = ?'),
+  insertWaitlistEmail: db.prepare('INSERT OR IGNORE INTO waitlist (email, created_at) VALUES (@email, @createdAt)'),
 };
 
 export function createPoll(): Poll {
@@ -189,6 +195,11 @@ export function rotateAdminToken(pollId: string, oldToken: string): string | nul
     rotatedAt: Date.now(),
   });
   return result.changes > 0 ? newToken : null;
+}
+
+export function addWaitlistEmail(email: string): boolean {
+  const result = stmts.insertWaitlistEmail.run({ email: email.trim().toLowerCase(), createdAt: Date.now() });
+  return result.changes > 0;
 }
 
 export function close(): void {

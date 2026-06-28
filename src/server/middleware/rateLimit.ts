@@ -11,7 +11,7 @@ export const generalLimiter = rateLimit({
 
 export const voteLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 30,
+  max: 60,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Voting too fast.' },
@@ -60,3 +60,69 @@ export function uploadLeakyBucket(req: Request, res: Response, next: NextFunctio
     res.status(429).json({ error: 'Upload rate limit exceeded. Slow down.' });
   }
 }
+
+interface IPBan {
+  failures: number;
+  bannedUntil: number;
+}
+
+const pollKeyBans = new Map<string, IPBan>();
+const MAX_POLL_KEY_FAILURES = 5;
+const POLL_KEY_BAN_MS = 60 * 60 * 1000;
+const MAX_POLL_BAN_ENTRIES = 20_000;
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, ban] of pollKeyBans) {
+    if (ban.bannedUntil && now > ban.bannedUntil) {
+      pollKeyBans.delete(key);
+    }
+  }
+}, 60_000);
+
+export function createPollGuard(req: Request, res: Response, next: NextFunction) {
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  const entry = pollKeyBans.get(ip);
+
+  if (entry && entry.bannedUntil && now < entry.bannedUntil) {
+    const remaining = Math.ceil((entry.bannedUntil - now) / 60000);
+    return res.status(429).json({ error: `Too many attempts. Try again in ${remaining} min.` });
+  }
+
+  next();
+}
+
+export function recordPollKeyFailure(ip: string): void {
+  const now = Date.now();
+  let entry = pollKeyBans.get(ip);
+
+  if (!entry) {
+    if (pollKeyBans.size >= MAX_POLL_BAN_ENTRIES) return;
+    entry = { failures: 0, bannedUntil: 0 };
+    pollKeyBans.set(ip, entry);
+  }
+
+  if (entry.bannedUntil && now > entry.bannedUntil) {
+    entry.failures = 0;
+    entry.bannedUntil = 0;
+  }
+
+  entry.failures++;
+
+  if (entry.failures >= MAX_POLL_KEY_FAILURES) {
+    entry.bannedUntil = now + POLL_KEY_BAN_MS;
+  }
+}
+
+export function clearPollKeyFailures(ip: string): void {
+  pollKeyBans.delete(ip);
+}
+
+export const waitlistLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many submissions. Try again later.' },
+});
