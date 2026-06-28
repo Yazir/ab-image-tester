@@ -8,7 +8,8 @@ import { Pairing, Selection, Image } from '../../shared/types';
 import { voteLimiter } from '../middleware/rateLimit';
 
 function loadVoterSecret(): string {
-  const secretPath = path.resolve(__dirname, '../../../data/.voter_secret');
+  const DATA_DIR = process.env.TEST_DATA_DIR || path.resolve(__dirname, '../../../data');
+  const secretPath = path.join(DATA_DIR, '.voter_secret');
   try {
     return fs.readFileSync(secretPath, 'utf-8').trim() || '';
   } catch {}
@@ -120,7 +121,7 @@ function csrfCheck(req: Request, res: Response, next: Function) {
 
 // Get pairings for voter
 router.get('/:pollId/pairings', voteLimiter, (req: Request, res: Response) => {
-  const poll = getPoll(req.params.pollId);
+  const poll = getPoll(req.params.pollId as string);
   if (!poll) return res.status(404).json({ error: 'Not found' });
   if (poll.images.length < 2) return res.status(400).json({ error: 'Need at least 2 images' });
 
@@ -150,7 +151,7 @@ router.get('/:pollId/pairings', voteLimiter, (req: Request, res: Response) => {
 
 // Submit vote
 router.post('/:pollId/vote', csrfCheck, voteLimiter, (req: Request, res: Response) => {
-  const poll = getPoll(req.params.pollId);
+  const poll = getPoll(req.params.pollId as string);
   if (!poll) return res.status(404).json({ error: 'Not found' });
 
   const tokenHeader = req.headers['x-voter-token'] as string;
@@ -192,7 +193,7 @@ router.post('/:pollId/vote', csrfCheck, voteLimiter, (req: Request, res: Respons
 
 // Check if voter has already voted
 router.get('/:pollId/voted', (req: Request, res: Response) => {
-  const poll = getPoll(req.params.pollId);
+  const poll = getPoll(req.params.pollId as string);
   if (!poll) return res.status(404).json({ error: 'Not found' });
 
   const fingerprint = (req.headers['x-voter-fingerprint'] as string) || '';

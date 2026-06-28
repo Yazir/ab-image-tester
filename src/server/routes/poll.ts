@@ -77,16 +77,14 @@ router.post('/', (_req: Request, res: Response) => {
 
 // Get poll (admin)
 router.get('/:pollId', requireAdmin, (req: Request, res: Response) => {
-  const poll = getPoll(req.params.pollId);
+  const poll = getPoll(req.params.pollId as string);
   if (!poll) return res.status(404).json({ error: 'Not found' });
-  const safe = { ...poll, adminToken: '[redacted]' };
-  safe.adminToken = poll.adminToken;
   res.json(poll);
 });
 
 // Get poll for public view
 router.get('/view/:pollId', (req: Request, res: Response) => {
-  const poll = getPoll(req.params.pollId);
+  const poll = getPoll(req.params.pollId as string);
   if (!poll) return res.status(404).json({ error: 'Not found' });
   const { adminToken, shareToken, ...safe } = poll;
   res.json(safe);
@@ -100,8 +98,10 @@ router.patch('/:pollId', requireAdmin, (req: Request, res: Response) => {
     if (req.body[key] === undefined) continue;
     switch (key) {
       case 'title':
+        if (typeof req.body[key] !== 'string' || req.body[key].length > 500) return res.status(400).json({ error: `${key} must be a string <= 500 characters` });
+        break;
       case 'description':
-        if (typeof req.body[key] !== 'string') return res.status(400).json({ error: `${key} must be a string` });
+        if (typeof req.body[key] !== 'string' || req.body[key].length > 5000) return res.status(400).json({ error: `${key} must be a string <= 5000 characters` });
         break;
       case 'rounds':
       case 'containerWidth':
@@ -120,14 +120,14 @@ router.patch('/:pollId', requireAdmin, (req: Request, res: Response) => {
     }
     updates[key] = req.body[key];
   }
-  const poll = updatePoll(req.params.pollId, updates as any);
+  const poll = updatePoll(req.params.pollId as string, updates as any);
   if (!poll) return res.status(404).json({ error: 'Not found' });
   res.json(poll);
 });
 
 // Upload image
 router.post('/:pollId/upload', requireAdmin, uploadLeakyBucket, upload.single('image'), (req: Request, res: Response) => {
-  const poll = getPoll(req.params.pollId);
+  const poll = getPoll(req.params.pollId as string);
   if (!poll) return res.status(404).json({ error: 'Not found' });
   if (poll.images.length >= MAX_IMAGES) {
     if (req.file) fs.unlinkSync(req.file.path);
@@ -162,7 +162,7 @@ router.post('/:pollId/upload', requireAdmin, uploadLeakyBucket, upload.single('i
 
 // Delete image
 router.delete('/:pollId/images/:imgId', requireAdmin, (req: Request, res: Response) => {
-  const poll = getPoll(req.params.pollId);
+  const poll = getPoll(req.params.pollId as string);
   if (!poll) return res.status(404).json({ error: 'Not found' });
   const img = poll.images.find((i: Image) => i.id === req.params.imgId);
   if (!img) return res.status(404).json({ error: 'Image not found' });
@@ -177,15 +177,15 @@ router.delete('/:pollId/images/:imgId', requireAdmin, (req: Request, res: Respon
 
 // Get/regenerate share token
 router.get('/:pollId/share', requireAdmin, (req: Request, res: Response) => {
-  const token = generateShareToken(req.params.pollId);
+  const token = generateShareToken(req.params.pollId as string);
   if (!token) return res.status(404).json({ error: 'Not found' });
-  const poll = getPoll(req.params.pollId)!;
+  const poll = getPoll(req.params.pollId as string)!;
   res.json({ shareToken: token, shareUrl: `/vote/${poll.id}` });
 });
 
 // Public admin share view
 router.get('/:pollId/public', requireAdminOrShare, (req: Request, res: Response) => {
-  const poll = getPoll(req.params.pollId);
+  const poll = getPoll(req.params.pollId as string);
   if (!poll) return res.status(404).json({ error: 'Not found' });
   const { adminToken, ...safe } = poll;
   res.json(safe);
@@ -193,20 +193,20 @@ router.get('/:pollId/public', requireAdminOrShare, (req: Request, res: Response)
 
 // Delete poll
 router.delete('/:pollId', requireAdmin, (req: Request, res: Response) => {
-  const poll = getPoll(req.params.pollId);
+  const poll = getPoll(req.params.pollId as string);
   if (!poll) return res.status(404).json({ error: 'Not found' });
   for (const img of poll.images) {
     const fp = path.join(UPLOADS_DIR, img.filename);
     if (fs.existsSync(fp)) fs.unlinkSync(fp);
   }
-  deletePoll(req.params.pollId);
+  deletePoll(req.params.pollId as string);
   res.json({ ok: true });
 });
 
 // Rotate admin token
 router.post('/:pollId/rotate-token', requireAdmin, (req: Request, res: Response) => {
   const token = req.headers['x-admin-token'] as string;
-  const newToken = rotateAdminToken(req.params.pollId, token);
+  const newToken = rotateAdminToken(req.params.pollId as string, token);
   if (!newToken) return res.status(403).json({ error: 'Token rotation failed' });
   res.json({ adminToken: newToken });
 });

@@ -7,16 +7,14 @@ let pollId = '';
 let token = '';
 let currentTab = 'images';
 
-export function renderAdmin(container: HTMLElement, pid: string, urlToken: string) {
+export function renderAdmin(container: HTMLElement, pid: string) {
   pollId = pid;
-  token = urlToken || sessionStorage.getItem(`adminToken-${pid}`) || '';
+  token = sessionStorage.getItem(`adminToken-${pid}`) || '';
 
   if (!token) {
     container.innerHTML = `<div class="hero"><h2>Access Denied</h2><p>Missing admin token. Create a poll from the home page.</p></div>`;
     return;
   }
-
-  if (!urlToken) sessionStorage.setItem(`adminToken-${pid}`, token);
 
   container.innerHTML = `
     <div>
@@ -103,12 +101,12 @@ async function startPreview(container: HTMLElement) {
       <button class="preview-close" id="preview-close-btn" title="Back to editor">&times;</button>
       <div class="round-counter">Round ${round + 1} / ${pairings.pairings.length}</div>
       <div class="vote-option left" id="vote-left" data-side="left">
-        <img src="/uploads/${p.left.filename}" alt="${escHtml(p.left.originalName)}" draggable="false">
+        <img src="/uploads/${escAttr(p.left.filename)}" alt="${escHtml(p.left.originalName)}" draggable="false">
         <div class="option-label">${escHtml(imgLabel(poll.images, p.left.id))}</div>
       </div>
       <div class="vote-vs">VS</div>
       <div class="vote-option right" id="vote-right" data-side="right">
-        <img src="/uploads/${p.right.filename}" alt="${escHtml(p.right.originalName)}" draggable="false">
+        <img src="/uploads/${escAttr(p.right.filename)}" alt="${escHtml(p.right.originalName)}" draggable="false">
         <div class="option-label">${escHtml(imgLabel(poll.images, p.right.id))}</div>
       </div>
     `;
@@ -118,7 +116,7 @@ async function startPreview(container: HTMLElement) {
       stage.remove();
       const b = document.getElementById('preview-progress');
       if (b) b.remove();
-      renderAdmin(container, pollId, token);
+      renderAdmin(container, pollId);
     });
 
     const bar = document.createElement('div');
@@ -150,7 +148,6 @@ async function startPreview(container: HTMLElement) {
       else if (e.key === 'ArrowRight') choose('right');
     };
     window.addEventListener('keydown', keyHandler);
-    (window as any).__previewKeyHandler = keyHandler;
   }
 
   function renderPreviewDone() {
@@ -181,10 +178,12 @@ async function startPreview(container: HTMLElement) {
 
     for (const img of poll.images) {
       const wins = stats[img.id]?.wins || 0;
-      const pct = total > 0 ? Math.round((wins / total) * 100) : 0;
+      const pct = Number.isFinite(wins) && Number.isFinite(total) && total > 0
+        ? Math.min(100, Math.max(0, Math.round((wins / total) * 100)))
+        : 0;
        html += `
         <div class="results-bar">
-          <img src="/uploads/${img.filename}" alt="" title="${escAttr(imgLabel(poll.images, img.id))}">
+          <img src="/uploads/${escAttr(img.filename)}" alt="" title="${escAttr(imgLabel(poll.images, img.id))}">
           <div style="flex:1">
             <div style="font-size:0.8rem;margin-bottom:2px">${escHtml(imgLabel(poll.images, img.id))}</div>
             <div class="results-bar-fill">
@@ -207,7 +206,7 @@ async function startPreview(container: HTMLElement) {
     });
 
     document.getElementById('preview-back')!.addEventListener('click', () => {
-      renderAdmin(container, pollId, token);
+      renderAdmin(container, pollId);
     });
   }
 
@@ -251,7 +250,7 @@ function renderImagesTab(poll: Poll) {
     <div class="image-grid" id="image-grid">
       ${poll.images.map((img, i) => `
         <div class="image-card" data-img="${img.id}">
-          <img src="/uploads/${img.filename}" alt="${escAttr(img.originalName)}">
+          <img src="/uploads/${escAttr(img.filename)}" alt="${escAttr(img.originalName)}">
           <span class="image-index">#${i + 1}</span>
           <span class="image-name">${escAttr(img.originalName)}</span>
           <button class="remove-btn" data-remove="${img.id}">&times;</button>
@@ -500,7 +499,7 @@ function renderSizeTab(poll: Poll) {
   panel.className = 'preview-panel';
   panel.innerHTML = firstImg
     ? `<div class="preview-panel-inner" id="preview-inner" style="width:${W}px;height:${H}px">
-         <img src="/uploads/${firstImg.filename}" alt="Preview" style="object-fit:${fitMode}">
+         <img src="/uploads/${escAttr(firstImg.filename)}" alt="Preview" style="object-fit:${fitMode}">
           <span class="preview-panel-dims">${W} &times; ${H} &middot; ${fitMode === 'contain' ? 'fit' : fitMode === 'scale-down' ? 'native' : 'cover'}</span>
        </div>`
     : `<div class="preview-empty">Upload an image to preview</div>`;
@@ -677,10 +676,12 @@ async function renderMetadataTab() {
 
     for (const img of sorted) {
       const stats = resData.imageStats[img.id];
-      const pct = stats.appearances > 0 ? Math.round((stats.wins / stats.appearances) * 100) : 0;
+      const pct = stats.appearances > 0
+        ? Math.min(100, Math.max(0, Math.round((stats.wins / stats.appearances) * 100)))
+        : 0;
       html += `
         <div class="results-bar">
-          <img src="/uploads/${img.filename}" alt="" title="${escAttr(imgLabel(resData.poll.images, img.id))}">
+          <img src="/uploads/${escAttr(img.filename)}" alt="" title="${escAttr(imgLabel(resData.poll.images, img.id))}">
           <div style="flex:1">
             <div style="font-size:0.8rem;margin-bottom:2px">${escHtml(imgLabel(resData.poll.images, img.id))}</div>
             <div class="results-bar-fill">
@@ -714,9 +715,9 @@ async function renderMetadataTab() {
                 return `
                   <div class="sel-row">
                     <span>R${s.round + 1}</span>
-                    ${leftImg ? `<img src="/uploads/${leftImg.filename}" class="${s.winnerId === leftImg.id ? 'winner' : 'loser'}" title="${escAttr(imgLabel(resData.poll.images, leftImg.id))}">` : ''}
+                    ${leftImg ? `<img src="/uploads/${escAttr(leftImg.filename)}" class="${s.winnerId === leftImg.id ? 'winner' : 'loser'}" title="${escAttr(imgLabel(resData.poll.images, leftImg.id))}">` : ''}
                     <span>vs</span>
-                    ${rightImg ? `<img src="/uploads/${rightImg.filename}" class="${s.winnerId === rightImg.id ? 'winner' : 'loser'}" title="${escAttr(imgLabel(resData.poll.images, rightImg.id))}">` : ''}
+                    ${rightImg ? `<img src="/uploads/${escAttr(rightImg.filename)}" class="${s.winnerId === rightImg.id ? 'winner' : 'loser'}" title="${escAttr(imgLabel(resData.poll.images, rightImg.id))}">` : ''}
                   </div>
                 `;
               }).join('')}

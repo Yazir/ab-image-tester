@@ -22,7 +22,7 @@ function anonName(fingerprint: string): string {
 
 // Get all voters
 router.get('/:pollId/voters', requireAdminOrShare, (req: Request, res: Response) => {
-  const poll = getPoll(req.params.pollId);
+  const poll = getPoll(req.params.pollId as string);
   if (!poll) return res.status(404).json({ error: 'Not found' });
 
   const votes = getVotesForPoll(poll.id);
@@ -43,7 +43,7 @@ router.get('/:pollId/voters', requireAdminOrShare, (req: Request, res: Response)
 
 // Get aggregated results
 router.get('/:pollId/results', requireAdminOrShare, (req: Request, res: Response) => {
-  const poll = getPoll(req.params.pollId);
+  const poll = getPoll(req.params.pollId as string);
   if (!poll) return res.status(404).json({ error: 'Not found' });
 
   const votes = getVotesForPoll(poll.id);

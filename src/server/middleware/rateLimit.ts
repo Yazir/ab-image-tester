@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import { rateLimit } from 'express-rate-limit';
 import { Request, Response, NextFunction } from 'express';
 
 export const generalLimiter = rateLimit({

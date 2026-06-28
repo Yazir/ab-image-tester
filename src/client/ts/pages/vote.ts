@@ -1,6 +1,6 @@
 import { showToast, openLightbox } from '../main';
 import { api, voterHeaders, storeVoterToken } from '../utils/api';
-import { escHtml } from '../utils/sanitize';
+import { escHtml, escAttr } from '../utils/sanitize';
 import type { Pairing, Poll } from '../types';
 
 interface VotePageState {
@@ -147,12 +147,12 @@ function renderStage() {
   stage.innerHTML = `
     <div class="round-counter">Round ${state.currentRound + 1} / ${state.pairings.length}</div>
     <div class="vote-option left" id="vote-left" data-side="left">
-      <img src="/uploads/${pairing.left.filename}" alt="${escHtml(pairing.left.originalName)}" draggable="false">
+      <img src="/uploads/${escAttr(pairing.left.filename)}" alt="${escHtml(pairing.left.originalName)}" draggable="false">
       <div class="option-label">${escHtml(imgLabel(p.images, pairing.left.id))}</div>
     </div>
     <div class="vote-vs">VS</div>
     <div class="vote-option right" id="vote-right" data-side="right">
-      <img src="/uploads/${pairing.right.filename}" alt="${escHtml(pairing.right.originalName)}" draggable="false">
+      <img src="/uploads/${escAttr(pairing.right.filename)}" alt="${escHtml(pairing.right.originalName)}" draggable="false">
       <div class="option-label">${escHtml(imgLabel(p.images, pairing.right.id))}</div>
     </div>
   `;

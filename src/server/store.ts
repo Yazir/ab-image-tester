@@ -4,7 +4,8 @@ import fs from 'fs';
 import { v4 as uuid } from 'uuid';
 import { Poll, Vote, Image, Selection } from '../shared/types';
 
-const DB_PATH = path.resolve(__dirname, '../../data/app.db');
+const DATA_DIR = process.env.TEST_DATA_DIR || path.resolve(__dirname, '../../data');
+const DB_PATH = path.join(DATA_DIR, 'app.db');
 
 const dataDir = path.dirname(DB_PATH);
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });

@@ -18,7 +18,7 @@ app.use(express.static(staticDir, {
   },
 }));
 
-app.get('/js/*', (req, res, next) => {
+app.get('/js/{*path}', (req, res, next) => {
   const filePath = path.join(staticDir, req.path);
   const safe = path.resolve(filePath);
   if (!safe.startsWith(staticDir)) return next();
@@ -34,11 +34,11 @@ app.get('/', (_req, res) => {
   res.sendFile(path.join(staticDir, 'index.html'));
 });
 
-app.get('/admin/*', (_req, res) => {
+app.get('/admin/{*path}', (_req, res) => {
   res.sendFile(path.join(staticDir, 'index.html'));
 });
 
-app.get('/vote/*', (_req, res) => {
+app.get('/vote/{*path}', (_req, res) => {
   res.sendFile(path.join(staticDir, 'index.html'));
 });
 

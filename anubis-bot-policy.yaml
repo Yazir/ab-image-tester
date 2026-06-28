@@ -1,0 +1,26 @@
+# Anubis is a PoW CAPTCHA that challenges bots before they reach the app.
+# Requests matching "serve" pass through untouched; everything else gets the PoW page.
+# All rules are regex; first match wins. If no rule matches, the default policy applies.
+#
+# See https://github.com/techaro/anubis
+
+allow:
+  # Let search engine crawlers through (they won't solve PoW challenges)
+  - name: "Search engine bots"
+    user_agent_regex: "(Googlebot|Bingbot|DuckDuckBot|Slurp|YandexBot|facebookexternalhit|Twitterbot|LinkedInBot|Applebot|Discordbot)"
+    action: "pass"
+
+  # Nginx reverse proxy health checks (if used in front)
+  - name: "Nginx health check"
+    user_agent_regex: "nginx-healthcheck"
+    path_regex: "^/$"
+    action: "pass"
+
+serve:
+  # Static assets (JS, CSS, favicon) from Vite build — never challenge
+  - name: "Static assets"
+    path_regex: "^/(assets/|js/|styles/|favicon\\.ico)"
+    action: "pass"
+
+# Everything else receives the PoW challenge (default)
+# This covers page routes (/, /admin/*, /vote/*), API calls, and image uploads

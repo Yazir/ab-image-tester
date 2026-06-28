@@ -27,7 +27,8 @@ export function createApp(): express.Application {
   app.use('/api/polls', voteRoutes);
   app.use('/api/polls', adminRoutes);
 
-  const uploadsDir = path.resolve(__dirname, '../../data/uploads');
+  const DATA_DIR = process.env.TEST_DATA_DIR || path.resolve(__dirname, '../../data');
+  const uploadsDir = path.join(DATA_DIR, 'uploads');
 
   const VALID_UPLOAD_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']);
   const EXT_TO_MIME: Record<string, string> = {
@@ -65,15 +66,16 @@ export function createApp(): express.Application {
 }
 
 export function errorHandler(err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) {
-  console.error(err);
+  if (process.env.NODE_ENV !== 'production') console.error(err);
+  else console.error(err.message || 'Unknown error');
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: 'File too large. Max 10 MB.' });
   }
   if (err.code === 'LIMIT_UNEXPECTED_FILE') {
     return res.status(400).json({ error: 'Unexpected file field.' });
   }
-  if (err.message === 'Only images allowed') {
-    return res.status(400).json({ error: 'Only image files are allowed.' });
+  if (err.message && (err.message.startsWith('Only ') || err.message === 'Only images allowed')) {
+    return res.status(400).json({ error: err.message });
   }
   res.status(500).json({ error: 'Internal server error' });
 }

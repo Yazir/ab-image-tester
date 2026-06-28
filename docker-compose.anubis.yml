@@ -1,0 +1,47 @@
+services:
+  app:
+    image: ghcr.io/your-username/ab-image-tester:latest
+    restart: unless-stopped
+    expose:
+      - "3000"
+    volumes:
+      - app_data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - TRUST_PROXY=1
+
+  anubis:
+    image: ghcr.io/techarohq/anubis:latest
+    restart: unless-stopped
+    environment:
+      BIND: ":8080"
+      DIFFICULTY: "4"
+      METRICS_BIND: ":9090"
+      SERVE_ROBOTS_TXT: "true"
+      TARGET: "http://app:3000"
+      POLICY_FNAME: "/data/cfg/botPolicy.yaml"
+      OG_PASSTHROUGH: "true"
+      OG_EXPIRY_TIME: "24h"
+    healthcheck:
+      test: ["CMD", "anubis", "--healthcheck"]
+      interval: 5s
+      timeout: 30s
+      retries: 5
+      start_period: 500ms
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./anubis-bot-policy.yaml:/data/cfg/botPolicy.yaml:ro"
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 --cleanup app
+    profiles:
+      - auto-update
+
+volumes:
+  app_data:

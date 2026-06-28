@@ -9,21 +9,13 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-    labels:
-      - "com.centurylinklabs.watchtower.scope=ab-image-tester"
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
   watchtower:
     image: containrrr/watchtower:latest
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 300 --cleanup --scope ab-image-tester
+    command: --interval 300 --cleanup app
     profiles:
       - auto-update
 
