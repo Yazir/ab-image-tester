@@ -28,7 +28,7 @@ docker build -t ab-image-tester .
 docker run -d -p 3000:3000 -v "$(pwd)/data:/app/data" ab-image-tester
 ```
 
-Prebuilt image: `ghcr.io/your-username/ab-image-tester:latest` (auto-published via GitHub Actions on push to `main`).
+Prebuilt image: `ghcr.io/yazir/ab-image-tester:latest` (auto-published via GitHub Actions on push to `main`).
 
 ### Docker Compose
 
