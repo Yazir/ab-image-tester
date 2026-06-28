@@ -16,7 +16,7 @@ export function createApp({ isDev } = { isDev: false }): express.Application {
     res.setHeader('X-XSS-Protection', '0');
     const csp = isDev
       ? "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' ws:"
-      : "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'";
+      : "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'sha256-90k8vHqdT80Brtxlv3oFi8HQh4+vdtyWQb8gjs8xgiY='; connect-src 'self'";
     res.setHeader('Content-Security-Policy', csp);
     next();
   }

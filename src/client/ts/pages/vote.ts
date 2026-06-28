@@ -88,6 +88,7 @@ function renderIntroScreen(container: HTMLElement) {
   `;
 
   document.getElementById('start-vote')!.addEventListener('click', () => {
+    container.innerHTML = '';
     renderProgressSidebar();
     renderStage();
   });

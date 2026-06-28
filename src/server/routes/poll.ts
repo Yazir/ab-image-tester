@@ -14,6 +14,18 @@ const router = Router();
 const UPLOADS_DIR = path.resolve(__dirname, '../../../data/uploads');
 const MAX_IMAGES = 50;
 const ALLOWED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']);
+const MAX_FILE_SIZE = parseFileSizeEnv(process.env.MAX_FILE_SIZE, 10 * 1024 * 1024);
+
+function parseFileSizeEnv(value: string | undefined, defaultBytes: number): number {
+  if (!value) return defaultBytes;
+  const m = value.trim().toLowerCase();
+  const num = parseFloat(m);
+  if (m.endsWith('g') || m.endsWith('gb')) return num * 1024 * 1024 * 1024;
+  if (m.endsWith('m') || m.endsWith('mb')) return num * 1024 * 1024;
+  if (m.endsWith('k') || m.endsWith('kb')) return num * 1024;
+  if (m.endsWith('b')) return num;
+  return parseInt(m, 10) || defaultBytes;
+}
 
 const MAGIC_BYTES: Map<string, number[]> = new Map();
 const sig = (...bytes: number[]) => bytes;
@@ -54,7 +66,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  limits: { fileSize: MAX_FILE_SIZE, files: 1 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (!ext || !ALLOWED_EXTENSIONS.has(ext)) {
@@ -73,6 +85,11 @@ const upload = multer({
 router.post('/', (_req: Request, res: Response) => {
   const poll = createPoll();
   res.status(201).json({ pollId: poll.id, adminToken: poll.adminToken });
+});
+
+// Client config
+router.get('/config', (_req: Request, res: Response) => {
+  res.json({ maxFileSize: MAX_FILE_SIZE });
 });
 
 // Get poll (admin)

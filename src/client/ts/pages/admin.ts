@@ -1,5 +1,5 @@
 import { showToast, openLightbox } from '../main';
-import { api, authHeaders } from '../utils/api';
+import { api, authHeaders, maxFileSize, loadConfig } from '../utils/api';
 import { escHtml, escAttr, escInput } from '../utils/sanitize';
 import type { Poll, Image, VoterInfo, Selection, FitMode, Pairing } from '../types';
 
@@ -66,6 +66,7 @@ export function renderAdmin(container: HTMLElement, pid: string) {
   });
   document.body.appendChild(toggleBtn);
 
+  loadConfig();
   loadPoll();
 }
 
@@ -376,6 +377,12 @@ function setupUpload(el: HTMLElement, poll: Poll) {
   };
 
   const uploadOne = async (file: File): Promise<boolean> => {
+    const limit = maxFileSize();
+    if (file.size > limit) {
+      const mb = Math.round(limit / (1024 * 1024) * 10) / 10;
+      showToast(`File too large. Max ${mb} MB.`, 'error');
+      return false;
+    }
     const form = new FormData();
     form.append('image', file);
     try {

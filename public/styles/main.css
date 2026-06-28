@@ -762,10 +762,14 @@ tr:hover td { background: rgba(124,92,252,0.05); }
 
 /* Responsive */
 @media (max-width: 700px) {
+  .vote-hero { text-align: left; }
+  .vote-hero .image-count { margin-bottom: 16px; }
   .vote-vs { font-size: 1.2rem; }
-  .vote-option { position: relative; width: 100%; height: 40vh; top: auto; bottom: auto; left: auto; right: auto; margin-bottom: 8px; }
-  .vote-stage { position: relative; top: auto; left: auto; right: auto; bottom: auto; min-height: 100vh; display: flex; flex-direction: column; gap: 8px; padding: 16px; }
+  .vote-option { position: relative; width: 100%; height: 40vh; max-width: 100%; top: auto; bottom: auto; left: auto; right: auto; margin-bottom: 8px; flex-shrink: 1; }
+  .vote-stage { position: relative; top: auto; left: auto; right: auto; bottom: auto; min-height: calc(100vh - 57px); display: flex; flex-direction: column; gap: 8px; padding: 16px; justify-content: flex-start; }
   .round-counter { position: relative; top: auto; left: auto; transform: none; margin-bottom: 8px; }
   .size-editor { padding-right: 0; }
   .preview-panel { position: relative; top: auto; right: auto; width: 100%; height: 300px; border-left: none; border-top: 1px solid var(--border); }
+  .progress-sidebar { width: 32px; }
+  .progress-dot { width: 8px; height: 8px; }
 }

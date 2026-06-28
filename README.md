@@ -107,3 +107,5 @@ Backup the entire `data/` directory. No external services required.
 | `PORT` | `3000` | HTTP server port |
 | `NODE_ENV` | — | Set to `production` for reduced error logging |
 | `TRUST_PROXY` | — | Set to `1` behind a reverse proxy (nginx, Anubis, etc.) |
+| `MAX_FILE_SIZE` | `10m` | Maximum upload file size. Accepts suffixes: `b`, `k`/`kb`, `m`/`mb`, `g`/`gb` |
+| `TEST_DATA_DIR` | `./data` | Override data directory path for tests or custom setups |

@@ -2,13 +2,33 @@ const BASE = '/api';
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(BASE + url, options);
+  if (!res.ok) {
+    let errMsg = `Request failed (${res.status})`;
+    try {
+      const data = await res.json();
+      errMsg = data.error || errMsg;
+    } catch {}
+    throw new Error(errMsg);
+  }
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
   return data as T;
 }
 
 export function api<T>(url: string, init?: RequestInit): Promise<T> {
   return request<T>(url, init);
+}
+
+let _maxFileSize = 10 * 1024 * 1024;
+
+export function maxFileSize(): number {
+  return _maxFileSize;
+}
+
+export async function loadConfig(): Promise<void> {
+  try {
+    const cfg = await api<{ maxFileSize: number }>('/polls/config');
+    _maxFileSize = cfg.maxFileSize;
+  } catch {}
 }
 
 export function authHeaders(token: string): Record<string, string> {
