@@ -118,7 +118,7 @@ label {
   text-align: center;
   padding: 80px 20px;
 }
-.hero h2 { font-size: 2rem; margin-bottom: 12px; }
+.hero h2 { font-size: 2rem; margin-bottom: 12px; overflow-wrap: break-word; }
 .hero p { color: var(--text-dim); margin-bottom: 32px; font-size: 1.1rem; }
 .hero .btn { padding: 14px 32px; font-size: 1.05rem; }
 
@@ -428,7 +428,7 @@ label {
   text-align: center;
   padding: 60px 20px;
 }
-.vote-hero h2 { font-size: 1.8rem; margin-bottom: 8px; }
+.vote-hero h2 { font-size: 1.8rem; margin-bottom: 8px; overflow-wrap: break-word; }
 .vote-hero p { color: var(--text-dim); margin-bottom: 24px; }
 .vote-hero .image-count { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 24px; }
 
@@ -898,6 +898,7 @@ tr:hover td { background: rgba(124,92,252,0.05); }
   font-size: 2.2rem;
   margin-bottom: 12px;
   font-weight: 700;
+  overflow-wrap: break-word;
 }
 
 .landing-hero .tagline {
