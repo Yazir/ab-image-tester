@@ -960,9 +960,9 @@ tr:hover td { background: rgba(124,92,252,0.05); }
   .waitlist-form { flex-direction: column; }
   .vote-hero { text-align: left; }
   .vote-hero .image-count { margin-bottom: 16px; }
-  .vote-vs { font-size: 1.2rem; }
-  .vote-option { position: relative; width: 100%; height: 40vh; max-width: 100%; top: auto; bottom: auto; left: auto; right: auto; margin-bottom: 8px; flex-shrink: 1; }
-  .vote-stage { position: relative; top: auto; left: auto; right: auto; bottom: auto; min-height: 100vh; display: flex; flex-direction: column; gap: 8px; padding: 48px 16px 16px 16px; justify-content: flex-start; }
+  .vote-vs { position: static; transform: none; font-size: 1.2rem; text-align: center; }
+  .vote-option { position: relative; width: 100%; height: 40vh; max-width: 100%; top: auto; bottom: auto; left: auto; right: auto; flex-shrink: 1; }
+  .vote-stage { position: relative; top: auto; left: auto; right: auto; bottom: auto; min-height: 100vh; display: flex; flex-direction: column; gap: 12px; padding: 48px 16px 16px 16px; justify-content: flex-start; }
   .size-editor { padding-right: 0; }
   .preview-panel { position: relative; top: auto; right: auto; width: 100%; height: 300px; border-left: none; border-top: 1px solid var(--border); }
   .progress-sidebar { height: 32px; padding: 0 8px; gap: 2px; }
