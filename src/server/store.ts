@@ -54,11 +54,22 @@ db.exec(`
   );
 `);
 
-try { db.exec(`ALTER TABLE polls ADD COLUMN admin_token_rotated_at INTEGER NOT NULL DEFAULT 0`); } catch {}
-try { db.exec(`ALTER TABLE polls ADD COLUMN admin_token_created_at INTEGER NOT NULL DEFAULT 0`); } catch {}
-try { db.exec(`ALTER TABLE polls ADD COLUMN show_results INTEGER NOT NULL DEFAULT 1`); } catch {}
-try { db.exec(`ALTER TABLE polls ADD COLUMN allow_scrolling INTEGER NOT NULL DEFAULT 0`); } catch {}
-try { db.exec(`ALTER TABLE polls ADD COLUMN show_labels INTEGER NOT NULL DEFAULT 0`); } catch {}
+function migrate(sql: string) {
+  try {
+    db.exec(sql);
+  } catch (e: any) {
+    if (!/duplicate column/i.test(e.message)) {
+      console.error(`Migration failed: ${sql} — ${e.message}`);
+    }
+  }
+}
+
+migrate(`ALTER TABLE polls ADD COLUMN admin_token_rotated_at INTEGER NOT NULL DEFAULT 0`);
+migrate(`ALTER TABLE polls ADD COLUMN admin_token_created_at INTEGER NOT NULL DEFAULT 0`);
+migrate(`ALTER TABLE polls ADD COLUMN show_results INTEGER NOT NULL DEFAULT 1`);
+migrate(`ALTER TABLE polls ADD COLUMN allow_scrolling INTEGER NOT NULL DEFAULT 0`);
+migrate(`ALTER TABLE polls ADD COLUMN show_labels INTEGER NOT NULL DEFAULT 0`);
+migrate(`ALTER TABLE votes ADD COLUMN ip_hash TEXT`);
 
 function rowToPoll(row: any): Poll {
   return {
@@ -86,6 +97,7 @@ function rowToVote(row: any): Vote {
     voterFingerprint: row.voter_fingerprint,
     selections: JSON.parse(row.selections),
     votedAt: row.voted_at,
+    ipHash: row.ip_hash,
   };
 }
 
@@ -97,10 +109,11 @@ const stmts = {
     container_width = @containerWidth, container_height = @containerHeight, fit_mode = @fitMode, allow_scrolling = @allowScrolling, show_results = @showResults, show_labels = @showLabels, share_token = @shareToken WHERE id = @id`),
   rotateToken: db.prepare(`UPDATE polls SET admin_token = @newToken, admin_token_rotated_at = @rotatedAt WHERE id = @id AND admin_token = @oldToken`),
   deletePoll: db.prepare('DELETE FROM polls WHERE id = ?'),
-  insertVote: db.prepare(`INSERT INTO votes (id, poll_id, voter_fingerprint, selections, voted_at)
-    VALUES (@id, @pollId, @voterFingerprint, @selections, @votedAt)`),
+  insertVote: db.prepare(`INSERT INTO votes (id, poll_id, voter_fingerprint, selections, voted_at, ip_hash)
+    VALUES (@id, @pollId, @voterFingerprint, @selections, @votedAt, @ipHash)`),
   getVotesForPoll: db.prepare('SELECT * FROM votes WHERE poll_id = ?'),
   getVoteForVoter: db.prepare('SELECT * FROM votes WHERE poll_id = ? AND voter_fingerprint = ?'),
+  countVotesByIPHash: db.prepare('SELECT COUNT(*) as cnt FROM votes WHERE poll_id = ? AND ip_hash = ?'),
   insertWaitlistEmail: db.prepare('INSERT OR IGNORE INTO waitlist (email, created_at) VALUES (@email, @createdAt)'),
 };
 
@@ -183,6 +196,7 @@ export function saveVote(vote: Vote): void {
     voterFingerprint: vote.voterFingerprint,
     selections: JSON.stringify(vote.selections),
     votedAt: vote.votedAt,
+    ipHash: vote.ipHash || null,
   });
 }
 
@@ -193,6 +207,11 @@ export function getVotesForPoll(pollId: string): Vote[] {
 export function getVotesForVoter(pollId: string, fingerprint: string): Vote | null {
   const row = stmts.getVoteForVoter.get(pollId, fingerprint);
   return row ? rowToVote(row) : null;
+}
+
+export function countVotesByIPHash(pollId: string, ipHash: string): number {
+  const row = stmts.countVotesByIPHash.get(pollId, ipHash) as any;
+  return row ? (row.cnt as number) : 0;
 }
 
 export function generateShareToken(pollId: string): string | null {

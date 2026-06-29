@@ -3,7 +3,7 @@ import { v4 as uuid } from 'uuid';
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
-import { getPoll, getVotesForPoll, getVotesForVoter, saveVote, incrementAnalyticsCounter } from '../store';
+import { getPoll, getVotesForPoll, getVotesForVoter, saveVote, incrementAnalyticsCounter, countVotesByIPHash } from '../store';
 import { Pairing, Selection, Image } from '../../shared/types';
 import { voteLimiter } from '../middleware/rateLimit';
 import { computeResults } from '../results';
@@ -34,6 +34,31 @@ function signFingerprint(pollId: string, fingerprint: string): string {
 function verifySignature(pollId: string, fingerprint: string, signature: string): boolean {
   const expected = signFingerprint(pollId, fingerprint);
   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
+
+function hashIP(ip: string, pollId: string): string {
+  const hmac = crypto.createHmac('sha256', VOTER_SECRET);
+  hmac.update(`${ip}:${pollId}`);
+  return hmac.digest('hex');
+}
+
+const rawLimit = parseInt(process.env.IP_VOTE_LIMIT || '3', 10);
+const IP_VOTE_LIMIT = isNaN(rawLimit) ? 3 : rawLimit;
+
+function checkIPLimit(req: Request, res: Response, pollId: string): string | null {
+  if (IP_VOTE_LIMIT <= 0) return null;
+  const ip = req.ip;
+  if (!ip) {
+    res.status(400).json({ error: 'Unable to determine client IP. IP vote limiting requires a reverse proxy or direct connection.' });
+    return null;
+  }
+  const ipHash = hashIP(ip, pollId);
+  const ipCount = countVotesByIPHash(pollId, ipHash);
+  if (ipCount >= IP_VOTE_LIMIT) {
+    res.status(429).json({ error: 'IP vote limit reached for this poll.' });
+    return null;
+  }
+  return ipHash;
 }
 
 function parseVoterToken(raw: string): { pollId: string; fingerprint: string; valid: boolean } | null {
@@ -178,6 +203,11 @@ router.get('/:pollId/pairings', voteLimiter, (req: Request, res: Response) => {
     return res.status(409).json({ error: 'Already voted', selections: existing.selections });
   }
 
+  if (IP_VOTE_LIMIT > 0) {
+    const result = checkIPLimit(req, res, poll.id);
+    if (result === null) return;
+  }
+
   const pairings = generatePairings(poll.id, fingerprint, poll.rounds, poll.images);
   const voterToken = issueVoterToken(poll.id, fingerprint);
   incrementAnalyticsCounter(new Date().toISOString().slice(0, 10), 'pairings_requested');
@@ -204,6 +234,14 @@ router.post('/:pollId/vote', csrfCheck, voteLimiter, (req: Request, res: Respons
     return res.status(409).json({ error: 'Already voted' });
   }
 
+  let ipHash: string | undefined;
+
+  if (IP_VOTE_LIMIT > 0) {
+    const result = checkIPLimit(req, res, poll.id);
+    if (result === null) return;
+    ipHash = result;
+  }
+
   const { selections } = req.body as { selections: Selection[] };
   if (!Array.isArray(selections) || selections.length === 0) {
     return res.status(400).json({ error: 'No selections provided' });
@@ -220,6 +258,7 @@ router.post('/:pollId/vote', csrfCheck, voteLimiter, (req: Request, res: Respons
     voterFingerprint: fingerprint,
     selections,
     votedAt: Date.now(),
+    ipHash,
   };
 
   saveVote(vote);

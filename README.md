@@ -112,3 +112,4 @@ Backup the entire `data/` directory. No external services required.
 | `TEST_DATA_DIR` | `./data` | Override data directory path for tests or custom setups |
 | `POLL_CREATE_KEY` | (none) | When set, poll creation requires `x-admin-key` header matching this value |
 | `CONSOLE_KEY` | (none) | When set, enables admin console at `/api/console/*` (secured by `x-console-key` header) |
+| `IP_VOTE_LIMIT` | `3` | Maximum votes per IP per poll. Set to `0` to disable IP-based limiting. |

@@ -62,6 +62,20 @@ export function renderVote(container: HTMLElement, pollId: string) {
   loadVote(container, pollId);
 }
 
+function validatePartialSelections(savedSelections: Array<{ round: number; leftImageId: string; rightImageId: string; winnerId: string }>, pairings: Pairing[]): boolean {
+  if (savedSelections.length > pairings.length) return false;
+  for (let i = 0; i < savedSelections.length; i++) {
+    const sel = savedSelections[i];
+    const pairing = pairings[i];
+    if (sel.round !== pairing.round) return false;
+    const actualIds = new Set([pairing.left.id, pairing.right.id]);
+    if (!actualIds.has(sel.leftImageId)) return false;
+    if (!actualIds.has(sel.rightImageId)) return false;
+    if (!actualIds.has(sel.winnerId)) return false;
+  }
+  return true;
+}
+
 async function loadVote(container: HTMLElement, pollId: string) {
   try {
     const vh = voterHeaders();
@@ -75,6 +89,7 @@ async function loadVote(container: HTMLElement, pollId: string) {
     }
 
     if (voted) {
+      clearProgress(pollId);
       renderPostVote(container, pollId);
       return;
     }
@@ -82,13 +97,31 @@ async function loadVote(container: HTMLElement, pollId: string) {
     const data = await api<{ pairings: Pairing[]; totalRounds: number; voterToken: string }>(`/polls/${pollId}/pairings`, { headers: vh });
     if (data.voterToken) storeVoterToken(data.voterToken);
     state.pairings = data.pairings;
+
+    const savedSelections = loadProgress(pollId);
+    if (savedSelections && validatePartialSelections(savedSelections, state.pairings)) {
+      state.selections = savedSelections;
+      state.currentRound = savedSelections.length;
+      state.animating = false;
+      container.innerHTML = '';
+      renderProgressSidebar();
+      renderStage();
+      return;
+    }
+
+    clearProgress(pollId);
     state.currentRound = 0;
     state.selections = [];
     state.animating = false;
 
     renderIntroScreen(container);
   } catch (e: any) {
-    container.innerHTML = `<div class="vote-hero"><h2>Error</h2><p>${escHtml(e.message)}</p></div>`;
+    const msg = e.message || '';
+    if (msg.includes('IP vote limit')) {
+      container.innerHTML = `<div class="vote-hero"><h2>${escHtml(state.poll?.title || 'Poll')}</h2><p>Vote limit reached. ${escHtml(msg)}</p><p style="color:var(--text-dim);margin-top:8px">Only a limited number of votes are allowed per network.</p></div>`;
+    } else {
+      container.innerHTML = `<div class="vote-hero"><h2>Error</h2><p>${escHtml(msg)}</p></div>`;
+    }
   }
 }
 
@@ -215,6 +248,8 @@ function renderStage() {
       winnerId: winner.id,
     });
 
+    saveProgress(state.poll!.id, state.selections);
+
     if (side === 'left') {
       leftEl.classList.add('smack-winner');
       rightEl.classList.add('smack-loser');
@@ -252,6 +287,7 @@ async function submitVotes() {
       headers: { ...voterHeaders(), 'Content-Type': 'application/json', 'Origin': window.location.origin },
       body: JSON.stringify({ selections: state.selections }),
     });
+    clearProgress(pollId);
     renderPostVote(container, pollId);
   } catch (e: any) {
     showToast(e.message, 'error');

@@ -36,6 +36,7 @@ export interface Vote {
   voterFingerprint: string;
   selections: Selection[];
   votedAt: number;
+  ipHash?: string;
 }
 
 export interface VoterInfo {
