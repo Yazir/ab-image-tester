@@ -310,6 +310,20 @@ function renderImagesTab(poll: Poll) {
       openLightbox((target as HTMLImageElement).src, `${idx} ${alt}`);
     }
   });
+
+  el.querySelectorAll('.remove-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const imgId = (btn as HTMLElement).dataset.remove!;
+      try {
+        await api(`/polls/${pollId}/images/${imgId}`, { method: 'DELETE', headers: authHeaders(token) });
+        (btn as HTMLElement).closest('.image-card')?.remove();
+        poll.images = poll.images.filter(i => i.id !== imgId);
+        const counter = el.querySelector('p') as HTMLParagraphElement | null;
+        if (counter) counter.textContent = `${poll.images.length} / ${maxImages()} images`;
+      } catch (err: any) { showToast(err.message, 'error'); }
+    });
+  });
   el.querySelectorAll('[data-view]').forEach(btn => {
     btn.addEventListener('click', () => {
       el.querySelectorAll('[data-view]').forEach(b => b.classList.remove('active'));
