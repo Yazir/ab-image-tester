@@ -70,6 +70,7 @@ migrate(`ALTER TABLE polls ADD COLUMN show_results INTEGER NOT NULL DEFAULT 1`);
 migrate(`ALTER TABLE polls ADD COLUMN allow_scrolling INTEGER NOT NULL DEFAULT 0`);
 migrate(`ALTER TABLE polls ADD COLUMN show_labels INTEGER NOT NULL DEFAULT 0`);
 migrate(`ALTER TABLE votes ADD COLUMN ip_hash TEXT`);
+migrate(`CREATE INDEX IF NOT EXISTS idx_votes_poll_ip ON votes(poll_id, ip_hash)`);
 
 function rowToPoll(row: any): Poll {
   return {
@@ -198,6 +199,30 @@ export function saveVote(vote: Vote): void {
     votedAt: vote.votedAt,
     ipHash: vote.ipHash || null,
   });
+}
+
+export function saveVoteWithIPCheck(
+  vote: Vote,
+  ipHash: string,
+  limit: number,
+): { ok: true } | { error: string } {
+  const tx = db.transaction(() => {
+    const row = stmts.countVotesByIPHash.get(vote.pollId, ipHash) as any;
+    const count = row ? (row.cnt as number) : 0;
+    if (count >= limit) {
+      return { error: 'IP vote limit reached for this poll.' };
+    }
+    stmts.insertVote.run({
+      id: vote.id,
+      pollId: vote.pollId,
+      voterFingerprint: vote.voterFingerprint,
+      selections: JSON.stringify(vote.selections),
+      votedAt: vote.votedAt,
+      ipHash,
+    });
+    return { ok: true as const };
+  });
+  return tx();
 }
 
 export function getVotesForPoll(pollId: string): Vote[] {

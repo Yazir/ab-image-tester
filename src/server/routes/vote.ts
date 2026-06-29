@@ -3,7 +3,7 @@ import { v4 as uuid } from 'uuid';
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
-import { getPoll, getVotesForPoll, getVotesForVoter, saveVote, incrementAnalyticsCounter, countVotesByIPHash } from '../store';
+import { getPoll, getVotesForPoll, getVotesForVoter, saveVote, saveVoteWithIPCheck, incrementAnalyticsCounter, countVotesByIPHash } from '../store';
 import { Pairing, Selection, Image } from '../../shared/types';
 import { voteLimiter } from '../middleware/rateLimit';
 import { computeResults } from '../results';
@@ -45,20 +45,11 @@ function hashIP(ip: string, pollId: string): string {
 const rawLimit = parseInt(process.env.IP_VOTE_LIMIT || '3', 10);
 const IP_VOTE_LIMIT = isNaN(rawLimit) ? 3 : rawLimit;
 
-function checkIPLimit(req: Request, res: Response, pollId: string): string | null {
+function computeIPHash(req: Request, pollId: string): string | null {
   if (IP_VOTE_LIMIT <= 0) return null;
   const ip = req.ip;
-  if (!ip) {
-    res.status(400).json({ error: 'Unable to determine client IP. IP vote limiting requires a reverse proxy or direct connection.' });
-    return null;
-  }
-  const ipHash = hashIP(ip, pollId);
-  const ipCount = countVotesByIPHash(pollId, ipHash);
-  if (ipCount >= IP_VOTE_LIMIT) {
-    res.status(429).json({ error: 'IP vote limit reached for this poll.' });
-    return null;
-  }
-  return ipHash;
+  if (!ip) return null;
+  return hashIP(ip, pollId);
 }
 
 function parseVoterToken(raw: string): { pollId: string; fingerprint: string; valid: boolean } | null {
@@ -204,8 +195,14 @@ router.get('/:pollId/pairings', voteLimiter, (req: Request, res: Response) => {
   }
 
   if (IP_VOTE_LIMIT > 0) {
-    const result = checkIPLimit(req, res, poll.id);
-    if (result === null) return;
+    const ipHash = computeIPHash(req, poll.id);
+    if (!ipHash) {
+      return res.status(400).json({ error: 'Unable to determine client IP. IP vote limiting requires a reverse proxy or direct connection.' });
+    }
+    const ipCount = countVotesByIPHash(poll.id, ipHash);
+    if (ipCount >= IP_VOTE_LIMIT) {
+      return res.status(429).json({ error: 'IP vote limit reached for this poll.' });
+    }
   }
 
   const pairings = generatePairings(poll.id, fingerprint, poll.rounds, poll.images);
@@ -234,12 +231,9 @@ router.post('/:pollId/vote', csrfCheck, voteLimiter, (req: Request, res: Respons
     return res.status(409).json({ error: 'Already voted' });
   }
 
-  let ipHash: string | undefined;
-
-  if (IP_VOTE_LIMIT > 0) {
-    const result = checkIPLimit(req, res, poll.id);
-    if (result === null) return;
-    ipHash = result;
+  const ipHash = computeIPHash(req, poll.id) || undefined;
+  if (IP_VOTE_LIMIT > 0 && !ipHash) {
+    return res.status(400).json({ error: 'Unable to determine client IP. IP vote limiting requires a reverse proxy or direct connection.' });
   }
 
   const { selections } = req.body as { selections: Selection[] };
@@ -261,7 +255,15 @@ router.post('/:pollId/vote', csrfCheck, voteLimiter, (req: Request, res: Respons
     ipHash,
   };
 
-  saveVote(vote);
+  if (ipHash) {
+    const result = saveVoteWithIPCheck(vote, ipHash, IP_VOTE_LIMIT);
+    if ('error' in result) {
+      return res.status(429).json({ error: result.error });
+    }
+  } else {
+    saveVote(vote);
+  }
+
   incrementAnalyticsCounter(new Date().toISOString().slice(0, 10), 'votes_submitted');
   res.status(201).json({ ok: true });
 });
