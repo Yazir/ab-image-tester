@@ -9,7 +9,15 @@ let currentTab = 'images';
 let previewActive = false;
 let stopPreview: (() => void) | null = null;
 
-export function renderAdmin(container: HTMLElement, pid: string) {
+function randomUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+export async function renderAdmin(container: HTMLElement, pid: string) {
   pollId = pid;
   token = sessionStorage.getItem(`adminToken-${pid}`) || '';
   previewActive = false;
@@ -66,7 +74,7 @@ export function renderAdmin(container: HTMLElement, pid: string) {
   });
   document.body.appendChild(toggleBtn);
 
-  loadConfig();
+  await loadConfig();
   loadPoll();
 }
 
@@ -82,7 +90,7 @@ async function startPreview(container: HTMLElement, toggleBtn: HTMLButtonElement
   toggleBtn.classList.remove('btn-primary');
   toggleBtn.classList.add('btn-danger');
 
-  const fp = 'preview-' + crypto.randomUUID();
+  const fp = 'preview-' + randomUUID();
   const pairings = await api<{ pairings: Pairing[]; totalRounds: number }>(`/polls/${pollId}/pairings`, { headers: { 'x-voter-fingerprint': fp } });
 
   let round = 0;

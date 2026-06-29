@@ -1,6 +1,7 @@
-import { showToast } from '../main';
+import { showToast, openLightbox } from '../main';
 import { api, voterHeaders, storeVoterToken } from '../utils/api';
-import { escHtml } from '../utils/sanitize';
+import { escHtml, escAttr } from '../utils/sanitize';
+const GITHUB_URL = 'https://github.com/yazir/ab-image-tester';
 const state = {
     poll: null,
     pairings: [],
@@ -66,9 +67,11 @@ function renderIntroScreen(container) {
       <p>${escHtml(p.description || 'Pick your favorites!')}</p>
       <div class="image-count">${p.images.length} images &middot; ${state.pairings.length} rounds</div>
       <button class="btn btn-primary" id="start-vote">Start Voting</button>
+      <a href="${GITHUB_URL}" target="_blank" rel="noopener" class="github-link">GitHub</a>
     </div>
   `;
     document.getElementById('start-vote').addEventListener('click', () => {
+        container.innerHTML = '';
         renderProgressSidebar();
         renderStage();
     });
@@ -80,14 +83,22 @@ function renderProgressSidebar() {
     const bar = document.createElement('div');
     bar.id = 'progress-sidebar';
     bar.className = 'progress-sidebar';
+    const dots = document.createElement('div');
+    dots.className = 'progress-dots';
     for (let i = 0; i < state.pairings.length; i++) {
         const dot = document.createElement('div');
         dot.className = 'progress-dot';
         dot.id = `progress-dot-${i}`;
         if (i === 0)
             dot.classList.add('current');
-        bar.appendChild(dot);
+        dots.appendChild(dot);
     }
+    bar.appendChild(dots);
+    const label = document.createElement('span');
+    label.className = 'progress-label';
+    label.id = 'progress-label';
+    label.textContent = `Rounds 1 / ${state.pairings.length}`;
+    bar.appendChild(label);
     document.body.appendChild(bar);
 }
 function updateProgress() {
@@ -100,6 +111,10 @@ function updateProgress() {
             dot.classList.add('done');
         if (i === state.currentRound)
             dot.classList.add('current');
+    }
+    const label = document.getElementById('progress-label');
+    if (label) {
+        label.textContent = `Rounds ${state.currentRound + 1} / ${state.pairings.length}`;
     }
 }
 function renderStage() {
@@ -124,15 +139,14 @@ function renderStage() {
     stage.style.setProperty('--fit-mode', p.fitMode);
     const scrollClass = p.allowScrolling ? ' allow-scroll' : '';
     stage.innerHTML = `
-    <div class="round-counter">Round ${state.currentRound + 1} / ${state.pairings.length}</div>
     <div class="vote-option left${scrollClass}" id="vote-left" data-side="left">
-      <img src="/uploads/${pairing.left.filename}" alt="${escHtml(pairing.left.originalName)}" draggable="false">
-      <div class="option-label">${escHtml(imgLabel(p.images, pairing.left.id))}</div>
+      <img src="/uploads/${escAttr(pairing.left.filename)}" alt="${escHtml(pairing.left.originalName)}" draggable="false">
+      ${p.showLabels ? `<div class="option-label">${escHtml(imgLabel(p.images, pairing.left.id))}</div>` : ''}
     </div>
     <div class="vote-vs">VS</div>
     <div class="vote-option right${scrollClass}" id="vote-right" data-side="right">
-      <img src="/uploads/${pairing.right.filename}" alt="${escHtml(pairing.right.originalName)}" draggable="false">
-      <div class="option-label">${escHtml(imgLabel(p.images, pairing.right.id))}</div>
+      <img src="/uploads/${escAttr(pairing.right.filename)}" alt="${escHtml(pairing.right.originalName)}" draggable="false">
+      ${p.showLabels ? `<div class="option-label">${escHtml(imgLabel(p.images, pairing.right.id))}</div>` : ''}
     </div>
   `;
     document.body.appendChild(stage);
@@ -194,10 +208,70 @@ async function submitVotes() {
 }
 function renderPostVote(container, pollId) {
     const p = state.poll;
+    const alreadyVoted = !state.selections.length;
+    const msg = alreadyVoted ? 'You have already voted.' : 'Thank you for voting!';
+    const resultsBtn = p.showResults
+        ? `<button class="btn btn-primary" id="show-results">Show Results</button>`
+        : '';
     container.innerHTML = `
     <div class="vote-hero">
       <h2>${escHtml(p.title || 'Poll')}</h2>
-      <p>Thank you for voting!</p>
+      <p>${escHtml(msg)}</p>
+      ${resultsBtn}
     </div>
   `;
+    if (p.showResults) {
+        document.getElementById('show-results').addEventListener('click', () => {
+            renderResults(container, pollId);
+        });
+    }
+}
+async function renderResults(container, pollId) {
+    container.innerHTML = '<div class="vote-hero"><p>Loading results...</p></div>';
+    try {
+        const data = await api(`/polls/${pollId}/results`);
+        const sorted = [...data.poll.images].sort((a, b) => {
+            const sa = data.imageStats[a.id];
+            const sb = data.imageStats[b.id];
+            const pa = sa.appearances > 0 ? sa.wins / sa.appearances : 0;
+            const pb = sb.appearances > 0 ? sb.wins / sb.appearances : 0;
+            return pb - pa;
+        });
+        let html = `
+      <div class="vote-hero" style="padding:24px 20px">
+        <h2>${escHtml(data.poll.title || 'Poll')} — Results</h2>
+        <p style="color:var(--text-dim);margin-bottom:24px">${data.totalVotes} vote(s)</p>
+        <div class="results-grid">
+    `;
+        for (const img of sorted) {
+            const stats = data.imageStats[img.id];
+            const pct = stats.appearances > 0
+                ? Math.min(100, Math.max(0, Math.round((stats.wins / stats.appearances) * 100)))
+                : 0;
+            html += `
+        <div class="results-card">
+          <div class="results-card-img">
+            <img src="/uploads/${escAttr(img.filename)}" alt="${escHtml(img.originalName)}" draggable="false">
+          </div>
+          <div class="results-card-info">
+            <div class="results-card-name" title="${escAttr(img.originalName)}">${escHtml(img.originalName)}</div>
+            <div class="results-bar-fill">
+              <div class="results-bar-inner" style="width:${pct}%"></div>
+            </div>
+            <div class="results-card-stat">${pct}% — ${stats.wins}/${stats.appearances} wins</div>
+          </div>
+        </div>
+      `;
+        }
+        html += '</div></div>';
+        container.innerHTML = html;
+        container.querySelectorAll('.results-card-img img').forEach(img => {
+            img.addEventListener('click', () => {
+                openLightbox(img.src);
+            });
+        });
+    }
+    catch (e) {
+        container.innerHTML = `<div class="vote-hero"><h2>Error</h2><p>${escHtml(e.message)}</p></div>`;
+    }
 }

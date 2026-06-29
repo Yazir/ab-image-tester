@@ -47,10 +47,18 @@ export function adminKeyHeaders(key: string): Record<string, string> {
   return { 'x-admin-key': key };
 }
 
+function randomUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 function getFingerprint(): string {
   let fp = localStorage.getItem('voterFingerprint');
   if (!fp) {
-    fp = crypto.randomUUID();
+    fp = randomUUID();
     localStorage.setItem('voterFingerprint', fp);
   }
   return fp;

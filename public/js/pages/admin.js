@@ -1,33 +1,41 @@
 import { showToast, openLightbox } from '../main';
-import { api, authHeaders } from '../utils/api';
+import { api, authHeaders, maxFileSize, maxImages, loadConfig } from '../utils/api';
 import { escHtml, escAttr } from '../utils/sanitize';
 let pollId = '';
 let token = '';
 let currentTab = 'images';
-export function renderAdmin(container, pid, urlToken) {
+let previewActive = false;
+let stopPreview = null;
+function randomUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+export function renderAdmin(container, pid) {
     pollId = pid;
-    token = urlToken || sessionStorage.getItem(`adminToken-${pid}`) || '';
+    token = sessionStorage.getItem(`adminToken-${pid}`) || '';
+    previewActive = false;
+    stopPreview = null;
     if (!token) {
         container.innerHTML = `<div class="hero"><h2>Access Denied</h2><p>Missing admin token. Create a poll from the home page.</p></div>`;
         return;
     }
-    if (!urlToken)
-        sessionStorage.setItem(`adminToken-${pid}`, token);
     container.innerHTML = `
     <div>
       <div class="admin-tabs">
-        <button class="admin-tab active" data-tab="images">Images</button>
-        <button class="admin-tab" data-tab="settings">Settings</button>
-        <button class="admin-tab" data-tab="size">Container Size</button>
-        <button class="admin-tab" data-tab="share">Share</button>
-        <button class="admin-tab" data-tab="metadata">Voters & Results</button>
-        <button class="btn btn-primary" id="preview-btn" style="margin-left:auto;padding:6px 16px;font-size:0.8rem">Preview</button>
+        <button class="admin-tab ${currentTab === 'images' ? 'active' : ''}" data-tab="images">Images</button>
+        <button class="admin-tab ${currentTab === 'settings' ? 'active' : ''}" data-tab="settings">Settings</button>
+        <button class="admin-tab ${currentTab === 'size' ? 'active' : ''}" data-tab="size">Container Size</button>
+        <button class="admin-tab ${currentTab === 'share' ? 'active' : ''}" data-tab="share">Share</button>
+        <button class="admin-tab ${currentTab === 'metadata' ? 'active' : ''}" data-tab="metadata">Voters & Results</button>
       </div>
-      <div class="admin-tab-content active" data-content="images"></div>
-      <div class="admin-tab-content" data-content="settings"></div>
-      <div class="admin-tab-content" data-content="size"></div>
-      <div class="admin-tab-content" data-content="share"></div>
-      <div class="admin-tab-content" data-content="metadata"></div>
+      <div class="admin-tab-content ${currentTab === 'images' ? 'active' : ''}" data-content="images"></div>
+      <div class="admin-tab-content ${currentTab === 'settings' ? 'active' : ''}" data-content="settings"></div>
+      <div class="admin-tab-content ${currentTab === 'size' ? 'active' : ''}" data-content="size"></div>
+      <div class="admin-tab-content ${currentTab === 'share' ? 'active' : ''}" data-content="share"></div>
+      <div class="admin-tab-content ${currentTab === 'metadata' ? 'active' : ''}" data-content="metadata"></div>
     </div>
   `;
     document.querySelectorAll('.admin-tab').forEach(tab => {
@@ -43,21 +51,65 @@ export function renderAdmin(container, pid, urlToken) {
             loadTabContent();
         });
     });
-    document.getElementById('preview-btn').addEventListener('click', () => startPreview(container));
+    const oldToggle = document.getElementById('preview-toggle-btn');
+    if (oldToggle)
+        oldToggle.remove();
+    const toggleBtn = document.createElement('button');
+    toggleBtn.id = 'preview-toggle-btn';
+    toggleBtn.className = 'btn btn-primary';
+    toggleBtn.style.cssText = 'position:fixed;top:12px;right:16px;z-index:30;padding:6px 16px;font-size:0.8rem';
+    toggleBtn.textContent = 'Preview';
+    toggleBtn.addEventListener('click', () => {
+        if (previewActive) {
+            stopPreview?.();
+        }
+        else {
+            startPreview(container, toggleBtn);
+        }
+    });
+    document.body.appendChild(toggleBtn);
+    await loadConfig();
     loadPoll();
 }
-async function startPreview(container) {
+async function startPreview(container, toggleBtn) {
     const poll = await api(`/polls/${pollId}`, { headers: authHeaders(token) });
     if (poll.images.length < 2) {
         showToast('Need at least 2 images to preview', 'error');
         return;
     }
-    const fp = 'preview-' + crypto.randomUUID();
+    previewActive = true;
+    toggleBtn.textContent = 'Stop Preview';
+    toggleBtn.classList.remove('btn-primary');
+    toggleBtn.classList.add('btn-danger');
+    const fp = 'preview-' + randomUUID();
     const pairings = await api(`/polls/${pollId}/pairings`, { headers: { 'x-voter-fingerprint': fp } });
     let round = 0;
     const selections = [];
     let animating = false;
+    let animTimer = null;
     const FM = poll.fitMode;
+    function previewCleanup() {
+        if (animTimer)
+            clearTimeout(animTimer);
+        const stage = document.getElementById('vote-stage');
+        if (stage)
+            stage.remove();
+        const bar = document.getElementById('preview-progress');
+        if (bar)
+            bar.remove();
+        const pp = document.getElementById('preview-panel');
+        if (pp)
+            pp.remove();
+        previewActive = false;
+        stopPreview = null;
+        toggleBtn.textContent = 'Preview';
+        toggleBtn.classList.remove('btn-danger');
+        toggleBtn.classList.add('btn-primary');
+    }
+    stopPreview = () => {
+        previewCleanup();
+        renderAdmin(container, pollId);
+    };
     function renderProgress() {
         const bar = document.getElementById('preview-progress');
         if (!bar)
@@ -94,22 +146,19 @@ async function startPreview(container) {
       <button class="preview-close" id="preview-close-btn" title="Back to editor">&times;</button>
       <div class="round-counter">Round ${round + 1} / ${pairings.pairings.length}</div>
       <div class="vote-option left" id="vote-left" data-side="left">
-        <img src="/uploads/${p.left.filename}" alt="${escHtml(p.left.originalName)}" draggable="false">
+        <img src="/uploads/${escAttr(p.left.filename)}" alt="${escHtml(p.left.originalName)}" draggable="false">
         <div class="option-label">${escHtml(imgLabel(poll.images, p.left.id))}</div>
       </div>
       <div class="vote-vs">VS</div>
       <div class="vote-option right" id="vote-right" data-side="right">
-        <img src="/uploads/${p.right.filename}" alt="${escHtml(p.right.originalName)}" draggable="false">
+        <img src="/uploads/${escAttr(p.right.filename)}" alt="${escHtml(p.right.originalName)}" draggable="false">
         <div class="option-label">${escHtml(imgLabel(poll.images, p.right.id))}</div>
       </div>
     `;
         document.body.appendChild(stage);
         document.getElementById('preview-close-btn').addEventListener('click', () => {
-            stage.remove();
-            const b = document.getElementById('preview-progress');
-            if (b)
-                b.remove();
-            renderAdmin(container, pollId, token);
+            previewCleanup();
+            renderAdmin(container, pollId);
         });
         const bar = document.createElement('div');
         bar.id = 'preview-progress';
@@ -132,7 +181,7 @@ async function startPreview(container) {
                 rightEl.classList.add('smack-winner');
                 leftEl.classList.add('smack-loser');
             }
-            setTimeout(() => { round++; animating = false; renderPairing(); }, 500);
+            animTimer = setTimeout(() => { round++; animating = false; renderPairing(); }, 500);
         };
         leftEl.addEventListener('click', () => choose('left'));
         rightEl.addEventListener('click', () => choose('right'));
@@ -143,15 +192,9 @@ async function startPreview(container) {
                 choose('right');
         };
         window.addEventListener('keydown', keyHandler);
-        window.__previewKeyHandler = keyHandler;
     }
     function renderPreviewDone() {
-        const stage = document.getElementById('vote-stage');
-        if (stage)
-            stage.remove();
-        const bar = document.getElementById('preview-progress');
-        if (bar)
-            bar.remove();
+        previewCleanup();
         const stats = {};
         for (const s of selections) {
             if (!stats[s.winnerId])
@@ -173,10 +216,12 @@ async function startPreview(container) {
     `;
         for (const img of poll.images) {
             const wins = stats[img.id]?.wins || 0;
-            const pct = total > 0 ? Math.round((wins / total) * 100) : 0;
+            const pct = Number.isFinite(wins) && Number.isFinite(total) && total > 0
+                ? Math.min(100, Math.max(0, Math.round((wins / total) * 100)))
+                : 0;
             html += `
         <div class="results-bar">
-          <img src="/uploads/${img.filename}" alt="" title="${escAttr(imgLabel(poll.images, img.id))}">
+          <img src="/uploads/${escAttr(img.filename)}" alt="" title="${escAttr(imgLabel(poll.images, img.id))}">
           <div style="flex:1">
             <div style="font-size:0.8rem;margin-bottom:2px">${escHtml(imgLabel(poll.images, img.id))}</div>
             <div class="results-bar-fill">
@@ -197,7 +242,7 @@ async function startPreview(container) {
             });
         });
         document.getElementById('preview-back').addEventListener('click', () => {
-            renderAdmin(container, pollId, token);
+            renderAdmin(container, pollId);
         });
     }
     renderPairing();
@@ -251,14 +296,14 @@ function renderImagesTab(poll) {
     <div class="image-grid" id="image-grid">
       ${poll.images.map((img, i) => `
         <div class="image-card" data-img="${img.id}">
-          <img src="/uploads/${img.filename}" alt="${escAttr(img.originalName)}">
+          <img src="/uploads/${escAttr(img.filename)}" alt="${escAttr(img.originalName)}">
           <span class="image-index">#${i + 1}</span>
           <span class="image-name">${escAttr(img.originalName)}</span>
           <button class="remove-btn" data-remove="${img.id}">&times;</button>
         </div>
       `).join('')}
     </div>
-    <p style="color:var(--text-dim);font-size:0.8rem">${poll.images.length} / 50 images</p>
+    <p style="color:var(--text-dim);font-size:0.8rem">${poll.images.length} / ${maxImages()} images</p>
   `;
     setupUpload(el, poll);
     document.getElementById('image-grid').addEventListener('click', (e) => {
@@ -269,6 +314,23 @@ function renderImagesTab(poll) {
             const alt = target.alt;
             openLightbox(target.src, `${idx} ${alt}`);
         }
+    });
+    el.querySelectorAll('.remove-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const imgId = btn.dataset.remove;
+            try {
+                await api(`/polls/${pollId}/images/${imgId}`, { method: 'DELETE', headers: authHeaders(token) });
+                btn.closest('.image-card')?.remove();
+                poll.images = poll.images.filter(i => i.id !== imgId);
+                const counter = el.querySelector('p');
+                if (counter)
+                    counter.textContent = `${poll.images.length} / ${maxImages()} images`;
+            }
+            catch (err) {
+                showToast(err.message, 'error');
+            }
+        });
     });
     el.querySelectorAll('[data-view]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -288,7 +350,7 @@ function renderImagesTab(poll) {
     });
 }
 function setupUpload(el, poll) {
-    const MAX = 50;
+    const MAX = maxImages();
     const zone = document.getElementById('upload-zone');
     const input = document.getElementById('file-input');
     const queue = [];
@@ -338,6 +400,12 @@ function setupUpload(el, poll) {
         currentPoll.value = fresh;
     };
     const uploadOne = async (file) => {
+        const limit = maxFileSize();
+        if (file.size > limit) {
+            const mb = Math.round(limit / (1024 * 1024) * 10) / 10;
+            showToast(`File too large. Max ${mb} MB.`, 'error');
+            return false;
+        }
         const form = new FormData();
         form.append('image', file);
         try {
@@ -416,23 +484,53 @@ function renderSettingsTab(poll) {
       <label for="poll-rounds">Number of Rounds</label>
       <input id="poll-rounds" type="number" min="1" max="100" value="${poll.rounds}">
     </div>
-    <button class="btn btn-primary" id="save-settings">Save Settings</button>
+    <div class="form-group">
+      <div class="checkbox-row">
+        <input type="checkbox" id="poll-show-results" ${poll.showResults ? 'checked' : ''}>
+        <label for="poll-show-results" class="checkbox-label">Show results to voters after voting</label>
+      </div>
+    </div>
+    <div class="form-group">
+      <div class="checkbox-row">
+        <input type="checkbox" id="poll-show-labels" ${poll.showLabels ? 'checked' : ''}>
+        <label for="poll-show-labels" class="checkbox-label">Show image numbers and filenames during voting</label>
+      </div>
+    </div>
   `;
-    document.getElementById('save-settings').addEventListener('click', async () => {
-        const title = document.getElementById('poll-title').value;
-        const description = document.getElementById('poll-desc').value;
-        const rounds = parseInt(document.getElementById('poll-rounds').value, 10);
+    const collect = () => ({
+        title: document.getElementById('poll-title').value,
+        description: document.getElementById('poll-desc').value,
+        rounds: parseInt(document.getElementById('poll-rounds').value, 10),
+        showResults: document.getElementById('poll-show-results').checked,
+        showLabels: document.getElementById('poll-show-labels').checked,
+    });
+    let saveTimer;
+    const scheduleSave = () => {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => doSave(), 600);
+    };
+    const doSave = async () => {
         try {
             await api(`/polls/${pollId}`, {
                 method: 'PATCH',
                 headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, description, rounds }),
+                body: JSON.stringify(collect()),
             });
-            showToast('Settings saved', 'success');
         }
         catch (e) {
             showToast(e.message, 'error');
         }
+    };
+    document.getElementById('poll-title').addEventListener('input', scheduleSave);
+    document.getElementById('poll-desc').addEventListener('input', scheduleSave);
+    document.getElementById('poll-rounds').addEventListener('input', scheduleSave);
+    document.getElementById('poll-show-results').addEventListener('change', () => {
+        clearTimeout(saveTimer);
+        doSave();
+    });
+    document.getElementById('poll-show-labels').addEventListener('change', () => {
+        clearTimeout(saveTimer);
+        doSave();
     });
 }
 function renderSizeTab(poll) {
@@ -467,6 +565,7 @@ function renderSizeTab(poll) {
           <div class="size-fit-group">
             <button class="size-fit-btn ${poll.fitMode === 'contain' ? 'active' : ''}" data-fit="contain">Fit within</button>
             <button class="size-fit-btn ${poll.fitMode === 'cover' ? 'active' : ''}" data-fit="cover">Fill</button>
+            <button class="size-fit-btn ${poll.fitMode === 'scale-down' ? 'active' : ''}" data-fit="scale-down">Native</button>
           </div>
         </div>
         <div class="size-row">
@@ -478,7 +577,6 @@ function renderSizeTab(poll) {
         <div class="size-row">
           ${firstImg ? `<button class="btn btn-secondary" id="detect-size" style="font-size:0.8rem">Detect from images</button>` : ''}
           <span id="detect-info" style="display:none;font-size:0.75rem;color:var(--text-dim)"></span>
-          <button class="btn btn-primary" id="save-size" style="font-size:0.85rem;margin-left:auto">Apply Settings</button>
           <button class="btn btn-secondary" id="reset-size" style="font-size:0.85rem">Reset Default</button>
         </div>
       </div>
@@ -499,8 +597,8 @@ function renderSizeTab(poll) {
     panel.className = 'preview-panel';
     panel.innerHTML = firstImg
         ? `<div class="preview-panel-inner" id="preview-inner" style="width:${W}px;height:${H}px">
-         <img src="/uploads/${firstImg.filename}" alt="Preview" style="object-fit:${fitMode}">
-         <span class="preview-panel-dims">${W} &times; ${H} &middot; ${fitMode === 'contain' ? 'fit' : 'cover'}</span>
+         <img src="/uploads/${escAttr(firstImg.filename)}" alt="Preview" style="object-fit:${fitMode}">
+          <span class="preview-panel-dims">${W} &times; ${H} &middot; ${fitMode === 'contain' ? 'fit' : fitMode === 'scale-down' ? 'native' : 'cover'}</span>
        </div>`
         : `<div class="preview-empty">Upload an image to preview</div>`;
     document.body.appendChild(panel);
@@ -527,7 +625,7 @@ function renderSizeTab(poll) {
             img.style.height = scroll ? 'auto' : '100%';
         }
         const dims = inner.querySelector('.preview-panel-dims');
-        dims.textContent = `${w} \u00d7 ${h} \u00b7 ${fitMode === 'contain' ? 'fit' : 'cover'}${scroll ? ' \u00b7 scroll' : ''}`;
+        dims.textContent = `${w} \u00d7 ${h} \u00b7 ${fitMode === 'contain' ? 'fit' : fitMode === 'scale-down' ? 'native' : 'cover'}${scroll ? ' \u00b7 scroll' : ''}`;
     };
     const syncFromW = () => { if (arLocked) {
         hInput.value = Math.round(parseInt(wInput.value, 10) / ar).toString();
@@ -537,23 +635,10 @@ function renderSizeTab(poll) {
         wInput.value = Math.round(parseInt(hInput.value, 10) * ar).toString();
         updatePreview();
     } };
-    wInput.addEventListener('input', () => { syncFromW(); updatePreview(); });
-    hInput.addEventListener('input', () => { syncFromH(); updatePreview(); });
     document.getElementById('lock-ar').addEventListener('click', () => {
         arLocked = !arLocked;
         ar = parseInt(wInput.value, 10) / parseInt(hInput.value, 10);
         lockIcon.textContent = arLocked ? '🔒' : '🔓';
-    });
-    el.querySelectorAll('.size-preset').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const bw = parseInt(btn.dataset.w, 10);
-            const bh = parseInt(btn.dataset.h, 10);
-            wInput.value = bw.toString();
-            hInput.value = bh.toString();
-            if (arLocked)
-                ar = bw / bh;
-            updatePreview();
-        });
     });
     const detectBtn = document.getElementById('detect-size');
     const detectInfo = document.getElementById('detect-info');
@@ -599,21 +684,54 @@ function renderSizeTab(poll) {
             el.querySelectorAll('.size-fit-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             updatePreview();
+            saveSize();
         });
     });
     document.getElementById('allow-scrolling').addEventListener('change', () => {
         updatePreview();
+        saveSize();
     });
-    document.getElementById('save-size')?.addEventListener('click', async () => {
+    const collectSize = () => ({
+        containerWidth: parseInt(wInput.value, 10),
+        containerHeight: parseInt(hInput.value, 10),
+        fitMode,
+        allowScrolling: document.getElementById('allow-scrolling').checked,
+    });
+    let sizeTimer;
+    const saveSize = async () => {
+        clearTimeout(sizeTimer);
         try {
-            await api(`/polls/${pollId}`, { method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-                body: JSON.stringify({ containerWidth: parseInt(wInput.value, 10), containerHeight: parseInt(hInput.value, 10), fitMode, allowScrolling: document.getElementById('allow-scrolling').checked }),
+            await api(`/polls/${pollId}`, {
+                method: 'PATCH',
+                headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+                body: JSON.stringify(collectSize()),
             });
-            showToast('Settings saved', 'success');
         }
         catch (e) {
             showToast(e.message, 'error');
         }
+    };
+    wInput.addEventListener('input', () => {
+        syncFromW();
+        clearTimeout(sizeTimer);
+        sizeTimer = setTimeout(() => saveSize(), 600);
+    });
+    hInput.addEventListener('input', () => {
+        syncFromH();
+        clearTimeout(sizeTimer);
+        sizeTimer = setTimeout(() => saveSize(), 600);
+    });
+    el.querySelectorAll('.size-preset').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const bw = parseInt(btn.dataset.w, 10);
+            const bh = parseInt(btn.dataset.h, 10);
+            wInput.value = bw.toString();
+            hInput.value = bh.toString();
+            if (arLocked)
+                ar = bw / bh;
+            updatePreview();
+            saveSize();
+        });
     });
     document.getElementById('reset-size')?.addEventListener('click', () => {
         wInput.value = '800';
@@ -623,6 +741,7 @@ function renderSizeTab(poll) {
         el.querySelectorAll('.size-fit-btn').forEach(b => b.classList.remove('active'));
         el.querySelector('[data-fit="contain"]')?.classList.add('active');
         updatePreview();
+        saveSize();
     });
 }
 function renderShareTab(_poll) {
@@ -680,10 +799,12 @@ async function renderMetadataTab() {
         });
         for (const img of sorted) {
             const stats = resData.imageStats[img.id];
-            const pct = stats.appearances > 0 ? Math.round((stats.wins / stats.appearances) * 100) : 0;
+            const pct = stats.appearances > 0
+                ? Math.min(100, Math.max(0, Math.round((stats.wins / stats.appearances) * 100)))
+                : 0;
             html += `
         <div class="results-bar">
-          <img src="/uploads/${img.filename}" alt="" title="${escAttr(imgLabel(resData.poll.images, img.id))}">
+          <img src="/uploads/${escAttr(img.filename)}" alt="" title="${escAttr(imgLabel(resData.poll.images, img.id))}">
           <div style="flex:1">
             <div style="font-size:0.8rem;margin-bottom:2px">${escHtml(imgLabel(resData.poll.images, img.id))}</div>
             <div class="results-bar-fill">
@@ -717,9 +838,9 @@ async function renderMetadataTab() {
                     return `
                   <div class="sel-row">
                     <span>R${s.round + 1}</span>
-                    ${leftImg ? `<img src="/uploads/${leftImg.filename}" class="${s.winnerId === leftImg.id ? 'winner' : 'loser'}" title="${escAttr(imgLabel(resData.poll.images, leftImg.id))}">` : ''}
+                    ${leftImg ? `<img src="/uploads/${escAttr(leftImg.filename)}" class="${s.winnerId === leftImg.id ? 'winner' : 'loser'}" title="${escAttr(imgLabel(resData.poll.images, leftImg.id))}">` : ''}
                     <span>vs</span>
-                    ${rightImg ? `<img src="/uploads/${rightImg.filename}" class="${s.winnerId === rightImg.id ? 'winner' : 'loser'}" title="${escAttr(imgLabel(resData.poll.images, rightImg.id))}">` : ''}
+                    ${rightImg ? `<img src="/uploads/${escAttr(rightImg.filename)}" class="${s.winnerId === rightImg.id ? 'winner' : 'loser'}" title="${escAttr(imgLabel(resData.poll.images, rightImg.id))}">` : ''}
                   </div>
                 `;
                 }).join('')}

@@ -56,3 +56,14 @@ export type Pairing = {
   right: Image;
   round: number;
 };
+
+// Shared types duplicated from src/shared/types.ts — keep in sync
+export interface AnalyticsSnapshot {
+  date: string;
+  votes: number;
+  uniqueVoters: number;
+  newPolls: number;
+  activePolls: number;
+  pairingsRequested: number;
+  votesSubmitted: number;
+}

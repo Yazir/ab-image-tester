@@ -1,13 +1,17 @@
 import { renderHome } from './pages/home';
 import { renderAdmin } from './pages/admin';
 import { renderVote } from './pages/vote';
-import { escHtml } from './utils/sanitize';
+import { renderConsole } from './pages/console';
+import { escHtml, escAttr } from './utils/sanitize';
 const content = document.getElementById('app-content');
 function route() {
     const path = window.location.pathname;
     const panel = document.getElementById('preview-panel');
     if (panel)
         panel.remove();
+    const toggleBtn = document.getElementById('preview-toggle-btn');
+    if (toggleBtn)
+        toggleBtn.remove();
     const stage = document.getElementById('vote-stage');
     if (stage)
         stage.remove();
@@ -17,10 +21,12 @@ function route() {
     if (path === '/') {
         renderHome(content);
     }
+    else if (path === '/console') {
+        renderConsole(content);
+    }
     else if (path.startsWith('/admin/')) {
         const pollId = path.split('/admin/')[1];
-        const token = sessionStorage.getItem(`adminToken-${pollId}`) || '';
-        renderAdmin(content, pollId, token);
+        renderAdmin(content, pollId);
     }
     else if (path.startsWith('/vote/')) {
         const pollId = path.split('/vote/')[1];
@@ -52,7 +58,7 @@ export function openLightbox(src, subtitle) {
         existing.remove();
     const overlay = document.createElement('div');
     overlay.className = 'lightbox-overlay';
-    overlay.innerHTML = `<img src="${src}" alt="">${subtitle ? `<span class="lightbox-subtitle">${escHtml(subtitle)}</span>` : ''}`;
+    overlay.innerHTML = `<img src="${escAttr(src)}" alt="">${subtitle ? `<span class="lightbox-subtitle">${escHtml(subtitle)}</span>` : ''}`;
     overlay.addEventListener('click', () => overlay.remove());
     document.addEventListener('keydown', function closeOnEsc(e) {
         if (e.key === 'Escape') {

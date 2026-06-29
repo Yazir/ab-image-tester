@@ -1,18 +1,15 @@
-import { showToast, openLightbox } from '../main';
+import { openLightbox } from '../main';
 import { escHtml, escAttr } from '../utils/sanitize';
-import type { AnalyticsSnapshot } from '../types';
-
 let consoleKey = '';
 let currentSection = 'overview';
-
-export function renderConsole(container: HTMLElement) {
-  const stored = sessionStorage.getItem('consoleKey') || '';
-  if (stored) {
-    consoleKey = stored;
-    renderLayout(container);
-    return;
-  }
-  container.innerHTML = `
+export function renderConsole(container) {
+    const stored = sessionStorage.getItem('consoleKey') || '';
+    if (stored) {
+        consoleKey = stored;
+        renderLayout(container);
+        return;
+    }
+    container.innerHTML = `
     <div class="console-hero">
       <div class="console-login">
         <h2>Console Access</h2>
@@ -23,48 +20,49 @@ export function renderConsole(container: HTMLElement) {
       </div>
     </div>
   `;
-  document.getElementById('console-key-submit')!.addEventListener('click', () => unlock(container));
-  document.getElementById('console-key-input')!.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') unlock(container);
-  });
+    document.getElementById('console-key-submit').addEventListener('click', () => unlock(container));
+    document.getElementById('console-key-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter')
+            unlock(container);
+    });
 }
-
-async function unlock(container: HTMLElement) {
-  const input = document.getElementById('console-key-input') as HTMLInputElement;
-  const err = document.getElementById('console-key-err')!;
-  const btn = document.getElementById('console-key-submit') as HTMLButtonElement;
-  const key = input.value.trim();
-  if (!key) return;
-  try {
-    btn.disabled = true;
-    btn.textContent = 'Verifying...';
-    const res = await fetch('/api/console/auth-check', { headers: { 'x-console-key': key } });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({ error: 'Invalid key' }));
-      throw new Error(data.error || 'Invalid key');
+async function unlock(container) {
+    const input = document.getElementById('console-key-input');
+    const err = document.getElementById('console-key-err');
+    const btn = document.getElementById('console-key-submit');
+    const key = input.value.trim();
+    if (!key)
+        return;
+    try {
+        btn.disabled = true;
+        btn.textContent = 'Verifying...';
+        const res = await fetch('/api/console/auth-check', { headers: { 'x-console-key': key } });
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({ error: 'Invalid key' }));
+            throw new Error(data.error || 'Invalid key');
+        }
+        consoleKey = key;
+        sessionStorage.setItem('consoleKey', key);
+        renderLayout(container);
     }
-    consoleKey = key;
-    sessionStorage.setItem('consoleKey', key);
-    renderLayout(container);
-  } catch (e: any) {
-    err.textContent = e.message;
-    err.style.display = 'block';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Unlock';
-  }
+    catch (e) {
+        err.textContent = e.message;
+        err.style.display = 'block';
+    }
+    finally {
+        btn.disabled = false;
+        btn.textContent = 'Unlock';
+    }
 }
-
-function renderLayout(container: HTMLElement) {
-  const navItems = [
-    { id: 'overview', icon: '\u25A0', label: 'Overview' },
-    { id: 'polls', icon: '\u2691', label: 'Poll Browser' },
-    { id: 'storage', icon: '\u25A6', label: 'Storage' },
-    { id: 'database', icon: '\u25A7', label: 'DB Explorer' },
-    { id: 'analytics', icon: '\u25CA', label: 'Analytics' },
-  ];
-
-  container.innerHTML = `
+function renderLayout(container) {
+    const navItems = [
+        { id: 'overview', icon: '\u25A0', label: 'Overview' },
+        { id: 'polls', icon: '\u2691', label: 'Poll Browser' },
+        { id: 'storage', icon: '\u25A6', label: 'Storage' },
+        { id: 'database', icon: '\u25A7', label: 'DB Explorer' },
+        { id: 'analytics', icon: '\u25CA', label: 'Analytics' },
+    ];
+    container.innerHTML = `
     <div class="console-layout">
       <nav class="console-sidebar">
         <div class="console-brand">
@@ -86,105 +84,108 @@ function renderLayout(container: HTMLElement) {
       </main>
     </div>
   `;
-
-  document.querySelectorAll('.console-nav-item').forEach(btn => {
-    btn.addEventListener('click', () => {
-      currentSection = (btn as HTMLElement).dataset.section!;
-      document.querySelectorAll('.console-nav-item').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      loadSection();
+    document.querySelectorAll('.console-nav-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+            currentSection = btn.dataset.section;
+            document.querySelectorAll('.console-nav-item').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            loadSection();
+        });
     });
-  });
-
-  document.getElementById('console-logout')!.addEventListener('click', () => {
-    sessionStorage.removeItem('consoleKey');
-    consoleKey = '';
-    currentSection = 'overview';
-    renderConsole(container);
-  });
-
-  document.addEventListener('keydown', function lockOnEsc(e) {
-    if (e.key === 'Escape') {
-      document.removeEventListener('keydown', lockOnEsc);
-      sessionStorage.removeItem('consoleKey');
-      consoleKey = '';
-      currentSection = 'overview';
-      window.location.reload();
+    document.getElementById('console-logout').addEventListener('click', () => {
+        sessionStorage.removeItem('consoleKey');
+        consoleKey = '';
+        currentSection = 'overview';
+        renderConsole(container);
+    });
+    document.addEventListener('keydown', function lockOnEsc(e) {
+        if (e.key === 'Escape') {
+            document.removeEventListener('keydown', lockOnEsc);
+            sessionStorage.removeItem('consoleKey');
+            consoleKey = '';
+            currentSection = 'overview';
+            window.location.reload();
+        }
+    });
+    loadSection();
+}
+async function consoleApi(url, init) {
+    const res = await fetch('/api/console' + url, {
+        ...init,
+        headers: { ...init?.headers, 'x-console-key': consoleKey },
+    });
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
+        throw new Error(data.error || `Request failed (${res.status})`);
     }
-  });
-
-  loadSection();
+    return res.json();
 }
-
-async function consoleApi<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch('/api/console' + url, {
-    ...init,
-    headers: { ...init?.headers, 'x-console-key': consoleKey },
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
-    throw new Error(data.error || `Request failed (${res.status})`);
-  }
-  return res.json();
-}
-
 function loadSection() {
-  switch (currentSection) {
-    case 'overview': loadOverview(); break;
-    case 'polls': loadPollBrowser(); break;
-    case 'storage': loadStorage(); break;
-    case 'database': loadDatabase(); break;
-    case 'analytics': loadAnalytics(); break;
-  }
+    switch (currentSection) {
+        case 'overview':
+            loadOverview();
+            break;
+        case 'polls':
+            loadPollBrowser();
+            break;
+        case 'storage':
+            loadStorage();
+            break;
+        case 'database':
+            loadDatabase();
+            break;
+        case 'analytics':
+            loadAnalytics();
+            break;
+    }
 }
-
 // ─── OVERVIEW ────────────────────────────────────────
 async function loadOverview() {
-  const main = document.getElementById('console-main')!;
-  main.innerHTML = '<div class="console-loading">Loading...</div>';
-  try {
-    const [overview, usage] = await Promise.all([
-      consoleApi<any>('/overview'),
-      consoleApi<{ date: string; count: number }[]>('/usage'),
-    ]);
-    renderOverview(main, overview, usage);
-  } catch (e: any) {
-    main.innerHTML = `<div class="console-error">Failed to load: ${escHtml(e.message)}</div>`;
-  }
+    const main = document.getElementById('console-main');
+    main.innerHTML = '<div class="console-loading">Loading...</div>';
+    try {
+        const [overview, usage] = await Promise.all([
+            consoleApi('/overview'),
+            consoleApi('/usage'),
+        ]);
+        renderOverview(main, overview, usage);
+    }
+    catch (e) {
+        main.innerHTML = `<div class="console-error">Failed to load: ${escHtml(e.message)}</div>`;
+    }
 }
-
-function fmtBytes(bytes: number): string {
-  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
-  if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
-  if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return bytes + ' B';
+function fmtBytes(bytes) {
+    if (bytes >= 1073741824)
+        return (bytes / 1073741824).toFixed(1) + ' GB';
+    if (bytes >= 1048576)
+        return (bytes / 1048576).toFixed(1) + ' MB';
+    if (bytes >= 1024)
+        return (bytes / 1024).toFixed(1) + ' KB';
+    return bytes + ' B';
 }
-
-function fmtDate(ts: number): string {
-  if (!ts) return '—';
-  return new Date(ts).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+function fmtDate(ts) {
+    if (!ts)
+        return '—';
+    return new Date(ts).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
-
-function renderOverview(main: HTMLElement, overview: any, usage: { date: string; count: number }[]) {
-  const maxVotes = Math.max(1, ...usage.map(u => u.count));
-  const now = Date.now();
-  const days = usage.length > 0 ? Math.max(1, Math.ceil((now - new Date(usage[0].date).getTime()) / 86400000)) : 30;
-  const startDate = new Date(now - days * 86400000);
-  const dayMap: Record<string, number> = {};
-  for (const u of usage) dayMap[u.date] = u.count;
-
-  const bars: string[] = [];
-  for (let i = 0; i < days; i++) {
-    const d = new Date(startDate.getTime() + (i + 1) * 86400000);
-    const key = d.toISOString().slice(0, 10);
-    const cnt = dayMap[key] || 0;
-    const h = maxVotes > 0 ? Math.max(2, Math.round((cnt / maxVotes) * 100)) : 2;
-    bars.push(`<div class="console-chart-bar" style="height:${h}%" title="${key}: ${cnt} vote(s)"><span class="console-chart-bar-label">${cnt}</span></div>`);
-  }
-
-  const activityLevel = overview.totalVotes > 100 ? 'high' : overview.totalVotes > 10 ? 'medium' : 'low';
-
-  main.innerHTML = `
+function renderOverview(main, overview, usage) {
+    const maxVotes = Math.max(1, ...usage.map(u => u.count));
+    const now = Date.now();
+    const days = usage.length > 0 ? Math.max(1, Math.ceil((now - new Date(usage[0].date).getTime()) / 86400000)) : 30;
+    const startDate = new Date(now - days * 86400000);
+    const dayMap = {};
+    for (const u of usage)
+        dayMap[u.date] = u.count;
+    const bars = [];
+    for (let i = 0; i < days; i++) {
+        const d = new Date(startDate.getTime() + (i + 1) * 86400000);
+        const key = d.toISOString().slice(0, 10);
+        const cnt = dayMap[key] || 0;
+        const h = maxVotes > 0 ? Math.max(2, Math.round((cnt / maxVotes) * 100)) : 2;
+        bars.push(`<div class="console-chart-bar" style="height:${h}%" title="${key}: ${cnt} vote(s)"><span class="console-chart-bar-label">${cnt}</span></div>`);
+    }
+    const activityLevel = overview.totalVotes > 100 ? 'high' : overview.totalVotes > 10 ? 'medium' : 'low';
+    main.innerHTML = `
     <h1 class="console-title">Dashboard</h1>
 
     <div class="console-cards">
@@ -279,26 +280,24 @@ function renderOverview(main: HTMLElement, overview: any, usage: { date: string;
     ` : ''}
   `;
 }
-
 // ─── POLL BROWSER ────────────────────────────────────
 async function loadPollBrowser() {
-  const main = document.getElementById('console-main')!;
-  main.innerHTML = '<div class="console-loading">Loading...</div>';
-  try {
-    const polls = await consoleApi<any[]>('/polls');
-    renderPollBrowser(main, polls);
-  } catch (e: any) {
-    main.innerHTML = `<div class="console-error">Failed to load: ${escHtml(e.message)}</div>`;
-  }
+    const main = document.getElementById('console-main');
+    main.innerHTML = '<div class="console-loading">Loading...</div>';
+    try {
+        const polls = await consoleApi('/polls');
+        renderPollBrowser(main, polls);
+    }
+    catch (e) {
+        main.innerHTML = `<div class="console-error">Failed to load: ${escHtml(e.message)}</div>`;
+    }
 }
-
-function renderPollBrowser(main: HTMLElement, polls: any[]) {
-  let sortBy = 'createdAt';
-  let sortDir = 'desc';
-  let searchTerm = '';
-
-  const render = (data: any[]) => {
-    main.innerHTML = `
+function renderPollBrowser(main, polls) {
+    let sortBy = 'createdAt';
+    let sortDir = 'desc';
+    let searchTerm = '';
+    const render = (data) => {
+        main.innerHTML = `
       <h1 class="console-title">Poll Browser</h1>
       <div class="console-toolbar">
         <div class="console-search">
@@ -320,7 +319,7 @@ function renderPollBrowser(main: HTMLElement, polls: any[]) {
           </thead>
           <tbody id="poll-tbody">
             ${data.length === 0 ? `<tr><td colspan="6" style="text-align:center;color:var(--text-dim)">No polls found</td></tr>` :
-              data.map(p => `
+            data.map(p => `
                 <tr class="console-poll-row" data-id="${escHtml(p.id)}">
                   <td>
                     <div class="console-poll-title">${escHtml(p.title || '(untitled)')}</div>
@@ -332,57 +331,51 @@ function renderPollBrowser(main: HTMLElement, polls: any[]) {
                   <td>${fmtDate(p.createdAt)}</td>
                   <td>${p.showResults ? '\u2714' : '\u2718'}</td>
                 </tr>
-              `).join('')
-            }
+              `).join('')}
           </tbody>
         </table>
       </div>
     `;
-
-    document.getElementById('poll-search')!.addEventListener('input', async (e) => {
-      searchTerm = (e.target as HTMLInputElement).value;
-      const results = await consoleApi<any[]>(`/polls?search=${encodeURIComponent(searchTerm)}&sortBy=${sortBy}&sortDir=${sortDir}`);
-      render(results);
-    });
-
-    main.querySelectorAll('.sortable').forEach(th => {
-      th.addEventListener('click', async () => {
-        const col = (th as HTMLElement).dataset.col!;
-        if (sortBy === col) {
-          sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-        } else {
-          sortBy = col;
-          sortDir = col === 'title' ? 'asc' : 'desc';
-        }
-        const results = await consoleApi<any[]>(`/polls?search=${encodeURIComponent(searchTerm)}&sortBy=${sortBy}&sortDir=${sortDir}`);
-        render(results);
-      });
-    });
-
-    const tbody = document.getElementById('poll-tbody')!;
-    main.querySelectorAll('.console-poll-row').forEach(row => {
-      row.addEventListener('click', async () => {
-        const id = (row as HTMLElement).dataset.id!;
-
-        const existing = tbody.querySelector('.console-poll-expand');
-        if (existing) {
-          const parentRow = existing.previousElementSibling as HTMLElement | null;
-          parentRow?.classList.remove('expanded');
-          existing.remove();
-          if (parentRow?.dataset.id === id) return;
-        }
-
-        const tr = row as HTMLElement;
-        tr.classList.add('expanded');
-
-        const expandRow = document.createElement('tr');
-        expandRow.className = 'console-poll-expand';
-        expandRow.innerHTML = `<td colspan="6"><div class="console-loading">Loading...</div></td>`;
-        tr.after(expandRow);
-
-        try {
-          const poll = await consoleApi<any>(`/polls/${id}`);
-          expandRow.innerHTML = `
+        document.getElementById('poll-search').addEventListener('input', async (e) => {
+            searchTerm = e.target.value;
+            const results = await consoleApi(`/polls?search=${encodeURIComponent(searchTerm)}&sortBy=${sortBy}&sortDir=${sortDir}`);
+            render(results);
+        });
+        main.querySelectorAll('.sortable').forEach(th => {
+            th.addEventListener('click', async () => {
+                const col = th.dataset.col;
+                if (sortBy === col) {
+                    sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+                }
+                else {
+                    sortBy = col;
+                    sortDir = col === 'title' ? 'asc' : 'desc';
+                }
+                const results = await consoleApi(`/polls?search=${encodeURIComponent(searchTerm)}&sortBy=${sortBy}&sortDir=${sortDir}`);
+                render(results);
+            });
+        });
+        const tbody = document.getElementById('poll-tbody');
+        main.querySelectorAll('.console-poll-row').forEach(row => {
+            row.addEventListener('click', async () => {
+                const id = row.dataset.id;
+                const existing = tbody.querySelector('.console-poll-expand');
+                if (existing) {
+                    const parentRow = existing.previousElementSibling;
+                    parentRow?.classList.remove('expanded');
+                    existing.remove();
+                    if (parentRow?.dataset.id === id)
+                        return;
+                }
+                const tr = row;
+                tr.classList.add('expanded');
+                const expandRow = document.createElement('tr');
+                expandRow.className = 'console-poll-expand';
+                expandRow.innerHTML = `<td colspan="6"><div class="console-loading">Loading...</div></td>`;
+                tr.after(expandRow);
+                try {
+                    const poll = await consoleApi(`/polls/${id}`);
+                    expandRow.innerHTML = `
             <td colspan="6">
               <div class="console-poll-detail-inline">
                 <h3>${escHtml(poll.title || '(untitled)')} <span style="font-weight:400;font-size:0.8rem;color:var(--text-dim)">${escHtml(poll.id)}</span></h3>
@@ -396,7 +389,7 @@ function renderPollBrowser(main: HTMLElement, polls: any[]) {
                 </div>
                 ${poll.images.length > 0 ? `
                   <div class="console-poll-images">
-                    ${poll.images.map((img: any, i: number) => `
+                    ${poll.images.map((img, i) => `
                       <div class="console-poll-thumb">
                         <img src="/uploads/${escAttr(img.filename)}" class="console-poll-thumb-img" data-src="/uploads/${escAttr(img.filename)}" alt="${escHtml(img.originalName)}" loading="lazy">
                         <span>#${i + 1} ${escHtml(img.originalName)}</span>
@@ -407,42 +400,39 @@ function renderPollBrowser(main: HTMLElement, polls: any[]) {
               </div>
             </td>
           `;
-
-          expandRow.querySelectorAll('.console-poll-thumb-img').forEach(img => {
-            img.addEventListener('click', (e) => {
-              e.stopPropagation();
-              const el = img as HTMLImageElement;
-              openLightbox(el.dataset.src || el.src, el.alt);
+                    expandRow.querySelectorAll('.console-poll-thumb-img').forEach(img => {
+                        img.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const el = img;
+                            openLightbox(el.dataset.src || el.src, el.alt);
+                        });
+                    });
+                }
+                catch (e) {
+                    expandRow.innerHTML = `<td colspan="6"><div class="console-error">Failed to load detail: ${escHtml(e.message)}</div></td>`;
+                }
             });
-          });
-        } catch (e: any) {
-          expandRow.innerHTML = `<td colspan="6"><div class="console-error">Failed to load detail: ${escHtml(e.message)}</div></td>`;
-        }
-      });
-    });
-  };
-
-  render(polls);
+        });
+    };
+    render(polls);
 }
-
 // ─── STORAGE ─────────────────────────────────────────
 async function loadStorage() {
-  const main = document.getElementById('console-main')!;
-  main.innerHTML = '<div class="console-loading">Loading...</div>';
-  try {
-    const stats = await consoleApi<any>('/storage');
-    renderStorage(main, stats);
-  } catch (e: any) {
-    main.innerHTML = `<div class="console-error">Failed to load: ${escHtml(e.message)}</div>`;
-  }
+    const main = document.getElementById('console-main');
+    main.innerHTML = '<div class="console-loading">Loading...</div>';
+    try {
+        const stats = await consoleApi('/storage');
+        renderStorage(main, stats);
+    }
+    catch (e) {
+        main.innerHTML = `<div class="console-error">Failed to load: ${escHtml(e.message)}</div>`;
+    }
 }
-
-function renderStorage(main: HTMLElement, stats: any) {
-  const totalBytes = stats.dbSizeBytes + stats.uploadDirSizeBytes;
-  const dbPct = totalBytes > 0 ? (stats.dbSizeBytes / totalBytes * 100).toFixed(1) : '0';
-  const uploadPct = totalBytes > 0 ? (stats.uploadDirSizeBytes / totalBytes * 100).toFixed(1) : '0';
-
-  main.innerHTML = `
+function renderStorage(main, stats) {
+    const totalBytes = stats.dbSizeBytes + stats.uploadDirSizeBytes;
+    const dbPct = totalBytes > 0 ? (stats.dbSizeBytes / totalBytes * 100).toFixed(1) : '0';
+    const uploadPct = totalBytes > 0 ? (stats.uploadDirSizeBytes / totalBytes * 100).toFixed(1) : '0';
+    main.innerHTML = `
     <h1 class="console-title">Storage</h1>
 
     <div class="console-cards">
@@ -489,7 +479,7 @@ function renderStorage(main: HTMLElement, stats: any) {
           <table class="console-table" id="storage-table">
             <thead><tr><th></th><th>#</th><th>Filename</th><th>Size</th></tr></thead>
             <tbody>
-              ${stats.largestFiles.map((f: any, i: number) => `
+              ${stats.largestFiles.map((f, i) => `
                 <tr>
                   <td style="padding:4px 8px;width:48px">
                     <img src="/uploads/${escAttr(f.name)}" class="console-storage-thumb" data-src="/uploads/${escAttr(f.name)}" title="${escHtml(f.name)}" loading="lazy">
@@ -505,37 +495,35 @@ function renderStorage(main: HTMLElement, stats: any) {
       </div>
     ` : ''}
   `;
-
-  main.querySelectorAll('.console-storage-thumb').forEach(img => {
-    img.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const el = img as HTMLImageElement;
-      openLightbox(el.dataset.src || el.src, el.title);
+    main.querySelectorAll('.console-storage-thumb').forEach(img => {
+        img.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const el = img;
+            openLightbox(el.dataset.src || el.src, el.title);
+        });
     });
-  });
 }
-
 // ─── DATABASE EXPLORER ───────────────────────────────
 async function loadDatabase() {
-  const main = document.getElementById('console-main')!;
-  main.innerHTML = '<div class="console-loading">Loading...</div>';
-  try {
-    const tables = await consoleApi<any[]>('/db/tables');
-    renderDatabase(main, tables);
-  } catch (e: any) {
-    main.innerHTML = `<div class="console-error">Failed to load: ${escHtml(e.message)}</div>`;
-  }
+    const main = document.getElementById('console-main');
+    main.innerHTML = '<div class="console-loading">Loading...</div>';
+    try {
+        const tables = await consoleApi('/db/tables');
+        renderDatabase(main, tables);
+    }
+    catch (e) {
+        main.innerHTML = `<div class="console-error">Failed to load: ${escHtml(e.message)}</div>`;
+    }
 }
-
-function renderDatabase(main: HTMLElement, tables: any[]) {
-  main.innerHTML = `
+function renderDatabase(main, tables) {
+    main.innerHTML = `
     <h1 class="console-title">Database Explorer</h1>
 
     <div class="console-panels">
       <div class="console-panel" style="flex:0 0 280px;max-width:320px">
         <h2 class="console-panel-title">Tables</h2>
         <div class="console-table-list">
-          ${tables.map((t: any) => `
+          ${tables.map((t) => `
             <div class="console-table-item" data-table="${escHtml(t.name)}">
               <span class="console-table-name">${escHtml(t.name)}</span>
               <span class="console-table-rows">${t.rowCount} rows</span>
@@ -563,22 +551,22 @@ function renderDatabase(main: HTMLElement, tables: any[]) {
       <div id="db-query-result" style="margin-top:16px"></div>
     </div>
   `;
-
-  main.querySelectorAll('.console-table-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const name = (item as HTMLElement).dataset.table!;
-      main.querySelectorAll('.console-table-item').forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
-      const t = tables.find((t: any) => t.name === name);
-      if (!t) return;
-      const detail = document.getElementById('db-detail')!;
-      detail.innerHTML = `
+    main.querySelectorAll('.console-table-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const name = item.dataset.table;
+            main.querySelectorAll('.console-table-item').forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+            const t = tables.find((t) => t.name === name);
+            if (!t)
+                return;
+            const detail = document.getElementById('db-detail');
+            detail.innerHTML = `
         <h2 class="console-panel-title">${escHtml(t.name)} <span style="font-weight:400;font-size:0.8rem;color:var(--text-dim)">${t.rowCount} row(s)</span></h2>
         <div class="console-table-wrap" style="margin-top:12px">
           <table class="console-table">
             <thead><tr><th>Column</th><th>Type</th><th>Not Null</th><th>PK</th></tr></thead>
             <tbody>
-              ${t.columns.map((c: any) => `
+              ${t.columns.map((c) => `
                 <tr>
                   <td style="font-family:monospace;font-weight:600">${escHtml(c.name)}</td>
                   <td style="font-family:monospace;font-size:0.8rem;color:var(--text-dim)">${escHtml(c.type)}</td>
@@ -590,104 +578,105 @@ function renderDatabase(main: HTMLElement, tables: any[]) {
           </table>
         </div>
       `;
+        });
     });
-  });
-
-  document.getElementById('db-run-query')!.addEventListener('click', async () => {
-    const sql = (document.getElementById('db-query') as HTMLTextAreaElement).value.trim();
-    const errEl = document.getElementById('db-query-error')!;
-    const resultEl = document.getElementById('db-query-result')!;
-    if (!sql) { errEl.textContent = 'Enter a query'; errEl.style.display = 'block'; return; }
-    errEl.style.display = 'none';
-    resultEl.innerHTML = '<div class="console-loading">Running...</div>';
-    try {
-      const result = await consoleApi<any>('/db/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sql }),
-      });
-      if (result.columns.length === 0) {
-        resultEl.innerHTML = `<div style="color:var(--text-dim);padding:12px">Query returned 0 rows</div>`;
-      } else {
-        resultEl.innerHTML = `
+    document.getElementById('db-run-query').addEventListener('click', async () => {
+        const sql = document.getElementById('db-query').value.trim();
+        const errEl = document.getElementById('db-query-error');
+        const resultEl = document.getElementById('db-query-result');
+        if (!sql) {
+            errEl.textContent = 'Enter a query';
+            errEl.style.display = 'block';
+            return;
+        }
+        errEl.style.display = 'none';
+        resultEl.innerHTML = '<div class="console-loading">Running...</div>';
+        try {
+            const result = await consoleApi('/db/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sql }),
+            });
+            if (result.columns.length === 0) {
+                resultEl.innerHTML = `<div style="color:var(--text-dim);padding:12px">Query returned 0 rows</div>`;
+            }
+            else {
+                resultEl.innerHTML = `
           <div style="color:var(--text-dim);font-size:0.8rem;margin-bottom:8px">${result.rowCount} row(s)</div>
           <div class="console-table-wrap">
             <table class="console-table">
-              <thead><tr>${result.columns.map((c: string) => `<th>${escHtml(c)}</th>`).join('')}</tr></thead>
+              <thead><tr>${result.columns.map((c) => `<th>${escHtml(c)}</th>`).join('')}</tr></thead>
               <tbody>
-                ${result.rows.map((r: any) => `
-                  <tr>${result.columns.map((c: string) => `<td style="font-family:monospace;font-size:0.8rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(typeof r[c] === 'object' ? JSON.stringify(r[c]) : String(r[c] ?? ''))}</td>`).join('')}</tr>
+                ${result.rows.map((r) => `
+                  <tr>${result.columns.map((c) => `<td style="font-family:monospace;font-size:0.8rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(typeof r[c] === 'object' ? JSON.stringify(r[c]) : String(r[c] ?? ''))}</td>`).join('')}</tr>
                 `).join('')}
               </tbody>
             </table>
           </div>
         `;
-      }
-    } catch (e: any) {
-      errEl.textContent = e.message;
-      errEl.style.display = 'block';
-      resultEl.innerHTML = '';
-    }
-  });
+            }
+        }
+        catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+            resultEl.innerHTML = '';
+        }
+    });
 }
-
 // ─── ANALYTICS ────────────────────────────────────────
 async function loadAnalytics() {
-  const main = document.getElementById('console-main')!;
-  main.innerHTML = '<div class="console-loading">Loading...</div>';
-  try {
-    const data = await consoleApi<AnalyticsSnapshot[]>('/analytics?days=30');
-    renderAnalytics(main, data);
-  } catch (e: any) {
-    main.innerHTML = `<div class="console-error">Failed to load: ${escHtml(e.message)}</div>`;
-  }
+    const main = document.getElementById('console-main');
+    main.innerHTML = '<div class="console-loading">Loading...</div>';
+    try {
+        const data = await consoleApi('/analytics?days=30');
+        renderAnalytics(main, data);
+    }
+    catch (e) {
+        main.innerHTML = `<div class="console-error">Failed to load: ${escHtml(e.message)}</div>`;
+    }
 }
-
-function renderAnalytics(main: HTMLElement, data: AnalyticsSnapshot[]) {
-  const totalVotes = data.reduce((s, d) => s + d.votes, 0);
-  const totalUnique = data.reduce((s, d) => s + d.uniqueVoters, 0);
-  const totalPairings = data.reduce((s, d) => s + d.pairingsRequested, 0);
-  const totalSubmitted = data.reduce((s, d) => s + d.votesSubmitted, 0);
-  const totalActive = data.reduce((s, d) => s + d.activePolls, 0);
-  const avgActive = data.length > 0 ? Math.round((totalActive / data.length) * 10) / 10 : 0;
-  const daysWithData = data.filter(d => d.votes > 0 || d.uniqueVoters > 0 || d.newPolls > 0 || d.activePolls > 0 || d.pairingsRequested > 0 || d.votesSubmitted > 0).length;
-  const avgVotes = daysWithData > 0 ? Math.round((totalVotes / data.length) * 10) / 10 : 0;
-  const avgUnique = daysWithData > 0 ? Math.round((totalUnique / data.length) * 10) / 10 : 0;
-  const completionRate = totalPairings > 0 ? Math.round((totalSubmitted / totalPairings) * 1000) / 10 : null;
-
-  const maxVotes = Math.max(1, ...data.map(d => Math.max(d.votes, d.uniqueVoters)));
-
-  const chartBars = data.map(d => {
-    const vh = maxVotes > 0 ? Math.max(2, Math.round((d.votes / maxVotes) * 100)) : 2;
-    const uh = maxVotes > 0 ? Math.max(2, Math.round((d.uniqueVoters / maxVotes) * 100)) : 2;
-    return `
+function renderAnalytics(main, data) {
+    const totalVotes = data.reduce((s, d) => s + d.votes, 0);
+    const totalUnique = data.reduce((s, d) => s + d.uniqueVoters, 0);
+    const totalPairings = data.reduce((s, d) => s + d.pairingsRequested, 0);
+    const totalSubmitted = data.reduce((s, d) => s + d.votesSubmitted, 0);
+    const totalActive = data.reduce((s, d) => s + d.activePolls, 0);
+    const avgActive = data.length > 0 ? Math.round((totalActive / data.length) * 10) / 10 : 0;
+    const daysWithData = data.filter(d => d.votes > 0 || d.uniqueVoters > 0 || d.newPolls > 0 || d.activePolls > 0 || d.pairingsRequested > 0 || d.votesSubmitted > 0).length;
+    const avgVotes = daysWithData > 0 ? Math.round((totalVotes / data.length) * 10) / 10 : 0;
+    const avgUnique = daysWithData > 0 ? Math.round((totalUnique / data.length) * 10) / 10 : 0;
+    const completionRate = totalPairings > 0 ? Math.round((totalSubmitted / totalPairings) * 1000) / 10 : null;
+    const maxVotes = Math.max(1, ...data.map(d => Math.max(d.votes, d.uniqueVoters)));
+    const chartBars = data.map(d => {
+        const vh = maxVotes > 0 ? Math.max(2, Math.round((d.votes / maxVotes) * 100)) : 2;
+        const uh = maxVotes > 0 ? Math.max(2, Math.round((d.uniqueVoters / maxVotes) * 100)) : 2;
+        return `
       <div class="console-analytics-chart-day">
         <div class="console-chart-bar" style="height:${vh}%" title="${d.date}: ${d.votes} vote(s)"><span class="console-chart-bar-label">${d.votes}</span></div>
         <div class="console-chart-bar console-analytics-chart-bar-alt" style="height:${uh}%" title="${d.date}: ${d.uniqueVoters} unique"><span class="console-chart-bar-label">${d.uniqueVoters}</span></div>
       </div>`;
-  });
-
-  const funnelBarWidth = totalPairings > 0 ? Math.max(1, Math.round((totalSubmitted / totalPairings) * 100)) : 0;
-
-  const renderTable = (sortBy: string, sortDir: string) => {
-    const sorted = [...data];
-    if (sortBy) {
-      sorted.sort((a, b) => {
-        const av = (a as any)[sortBy] ?? 0;
-        const bv = (b as any)[sortBy] ?? 0;
-        return sortDir === 'asc' ? av - bv : bv - av;
-      });
-    } else {
-      sorted.sort((a, b) => a.date.localeCompare(b.date));
-    }
-
-    const tbody = document.getElementById('analytics-tbody');
-    if (!tbody) return;
-    tbody.innerHTML = sorted.length === 0
-      ? `<tr><td colspan="8" style="text-align:center;color:var(--text-dim)">No data yet</td></tr>`
-      : sorted.map(d => {
-        const cr = d.pairingsRequested > 0 ? Math.round((d.votesSubmitted / d.pairingsRequested) * 1000) / 10 : null;
-        return `
+    });
+    const funnelBarWidth = totalPairings > 0 ? Math.max(1, Math.round((totalSubmitted / totalPairings) * 100)) : 0;
+    const renderTable = (sortBy, sortDir) => {
+        const sorted = [...data];
+        if (sortBy) {
+            sorted.sort((a, b) => {
+                const av = a[sortBy] ?? 0;
+                const bv = b[sortBy] ?? 0;
+                return sortDir === 'asc' ? av - bv : bv - av;
+            });
+        }
+        else {
+            sorted.sort((a, b) => a.date.localeCompare(b.date));
+        }
+        const tbody = document.getElementById('analytics-tbody');
+        if (!tbody)
+            return;
+        tbody.innerHTML = sorted.length === 0
+            ? `<tr><td colspan="8" style="text-align:center;color:var(--text-dim)">No data yet</td></tr>`
+            : sorted.map(d => {
+                const cr = d.pairingsRequested > 0 ? Math.round((d.votesSubmitted / d.pairingsRequested) * 1000) / 10 : null;
+                return `
           <tr>
             <td style="font-family:monospace;font-size:0.8rem">${d.date}</td>
             <td>${d.votes}</td>
@@ -698,31 +687,29 @@ function renderAnalytics(main: HTMLElement, data: AnalyticsSnapshot[]) {
             <td>${d.votesSubmitted}</td>
             <td>${cr !== null ? cr + '%' : '\u2014'}</td>
           </tr>`;
-      }).join('');
-  };
-
-  const renderTableHead = (sortBy: string, sortDir: string) => {
-    const cols = [
-      { key: '', label: 'Date', sortable: false },
-      { key: 'votes', label: 'Votes', sortable: true },
-      { key: 'uniqueVoters', label: 'Unique Voters', sortable: true },
-      { key: 'newPolls', label: 'New Polls', sortable: true },
-      { key: 'activePolls', label: 'Active Polls', sortable: true },
-      { key: 'pairingsRequested', label: 'Req', sortable: true },
-      { key: 'votesSubmitted', label: 'Voted', sortable: true },
-      { key: '', label: 'Compl %', sortable: false },
-    ];
-    return cols.map(c => {
-      if (!c.sortable) return `<th>${c.label}</th>`;
-      const arrow = sortBy === c.key ? (sortDir === 'asc' ? '\u2191' : '\u2193') : '';
-      return `<th class="sortable" data-col="${c.key}">${c.label} <span class="sort-arrow">${arrow}</span></th>`;
-    }).join('');
-  };
-
-  let sortBy = '';
-  let sortDir = 'desc';
-
-  main.innerHTML = `
+            }).join('');
+    };
+    const renderTableHead = (sortBy, sortDir) => {
+        const cols = [
+            { key: '', label: 'Date', sortable: false },
+            { key: 'votes', label: 'Votes', sortable: true },
+            { key: 'uniqueVoters', label: 'Unique Voters', sortable: true },
+            { key: 'newPolls', label: 'New Polls', sortable: true },
+            { key: 'activePolls', label: 'Active Polls', sortable: true },
+            { key: 'pairingsRequested', label: 'Req', sortable: true },
+            { key: 'votesSubmitted', label: 'Voted', sortable: true },
+            { key: '', label: 'Compl %', sortable: false },
+        ];
+        return cols.map(c => {
+            if (!c.sortable)
+                return `<th>${c.label}</th>`;
+            const arrow = sortBy === c.key ? (sortDir === 'asc' ? '\u2191' : '\u2193') : '';
+            return `<th class="sortable" data-col="${c.key}">${c.label} <span class="sort-arrow">${arrow}</span></th>`;
+        }).join('');
+    };
+    let sortBy = '';
+    let sortDir = 'desc';
+    main.innerHTML = `
     <h1 class="console-title">Analytics</h1>
 
     <div class="console-cards">
@@ -813,25 +800,24 @@ function renderAnalytics(main: HTMLElement, data: AnalyticsSnapshot[]) {
       </div>
     </div>
   `;
-
-  renderTable(sortBy, sortDir);
-
-  const bindSort = () => {
-    const thead = document.getElementById('analytics-thead')!;
-    thead.querySelectorAll('.sortable').forEach(th => {
-      th.addEventListener('click', () => {
-        const col = (th as HTMLElement).dataset.col!;
-        if (sortBy === col) {
-          sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-        } else {
-          sortBy = col;
-          sortDir = 'desc';
-        }
-        document.getElementById('analytics-thead')!.innerHTML = renderTableHead(sortBy, sortDir);
-        renderTable(sortBy, sortDir);
-        bindSort();
-      });
-    });
-  };
-  bindSort();
+    renderTable(sortBy, sortDir);
+    const bindSort = () => {
+        const thead = document.getElementById('analytics-thead');
+        thead.querySelectorAll('.sortable').forEach(th => {
+            th.addEventListener('click', () => {
+                const col = th.dataset.col;
+                if (sortBy === col) {
+                    sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+                }
+                else {
+                    sortBy = col;
+                    sortDir = 'desc';
+                }
+                document.getElementById('analytics-thead').innerHTML = renderTableHead(sortBy, sortDir);
+                renderTable(sortBy, sortDir);
+                bindSort();
+            });
+        });
+    };
+    bindSort();
 }

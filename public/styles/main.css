@@ -355,10 +355,10 @@ label {
 
 .preview-panel {
   position: fixed;
-  top: 57px;
+  top: 0;
   right: 0;
   width: 50vw;
-  height: calc(100vh - 57px);
+  height: calc(100vh - 36px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -434,7 +434,7 @@ label {
 
 .vote-stage {
   position: fixed;
-  top: 93px;
+  top: 36px;
   left: 0;
   right: 0;
   bottom: 0;
@@ -560,7 +560,7 @@ label {
   position: fixed;
   left: 0;
   right: 0;
-  top: 57px;
+  top: 0;
   height: 36px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
@@ -962,7 +962,7 @@ tr:hover td { background: rgba(124,92,252,0.05); }
   .vote-hero .image-count { margin-bottom: 16px; }
   .vote-vs { font-size: 1.2rem; }
   .vote-option { position: relative; width: 100%; height: 40vh; max-width: 100%; top: auto; bottom: auto; left: auto; right: auto; margin-bottom: 8px; flex-shrink: 1; }
-  .vote-stage { position: relative; top: auto; left: auto; right: auto; bottom: auto; min-height: calc(100vh - 57px); display: flex; flex-direction: column; gap: 8px; padding: 16px; justify-content: flex-start; }
+  .vote-stage { position: relative; top: auto; left: auto; right: auto; bottom: auto; min-height: 100vh; display: flex; flex-direction: column; gap: 8px; padding: 48px 16px 16px 16px; justify-content: flex-start; }
   .size-editor { padding-right: 0; }
   .preview-panel { position: relative; top: auto; right: auto; width: 100%; height: 300px; border-left: none; border-top: 1px solid var(--border); }
   .progress-sidebar { height: 32px; padding: 0 8px; gap: 2px; }

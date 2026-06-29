@@ -3,6 +3,8 @@ import { api, voterHeaders, storeVoterToken } from '../utils/api';
 import { escHtml, escAttr } from '../utils/sanitize';
 import type { Image, Pairing, Poll } from '../types';
 
+const GITHUB_URL = 'https://github.com/yazir/ab-image-tester';
+
 interface VotePageState {
   poll: Poll | null;
   pairings: Pairing[];
@@ -10,6 +12,28 @@ interface VotePageState {
   selections: Array<{ round: number; leftImageId: string; rightImageId: string; winnerId: string }>;
   animating: boolean;
   keyHandler: ((e: KeyboardEvent) => void) | null;
+}
+
+const PROGRESS_PREFIX = 'vote_progress_';
+
+function saveProgress(pollId: string, selections: Array<{ round: number; leftImageId: string; rightImageId: string; winnerId: string }>) {
+  localStorage.setItem(PROGRESS_PREFIX + pollId, JSON.stringify(selections));
+}
+
+function loadProgress(pollId: string): Array<{ round: number; leftImageId: string; rightImageId: string; winnerId: string }> | null {
+  const raw = localStorage.getItem(PROGRESS_PREFIX + pollId);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearProgress(pollId: string) {
+  localStorage.removeItem(PROGRESS_PREFIX + pollId);
 }
 
 const state: VotePageState = {
@@ -84,6 +108,7 @@ function renderIntroScreen(container: HTMLElement) {
       <p>${escHtml(p.description || 'Pick your favorites!')}</p>
       <div class="image-count">${p.images.length} images &middot; ${state.pairings.length} rounds</div>
       <button class="btn btn-primary" id="start-vote">Start Voting</button>
+      <a href="${GITHUB_URL}" target="_blank" rel="noopener" class="github-link">GitHub</a>
     </div>
   `;
 
